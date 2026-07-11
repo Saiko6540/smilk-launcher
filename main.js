@@ -115,7 +115,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false, // Turn off default OS frame
-    title: 'Submarine Milk Launcher',
+    title: 'smilk launcher',
     icon: path.join(__dirname, 'icon.png'),
     backgroundColor: '#0a0a0c',
     webPreferences: {
@@ -309,7 +309,7 @@ ipcMain.handle('select-java-path', async () => {
 
 // Open website externally
 ipcMain.on('open-website', () => {
-  shell.openExternal('https://submarinemilk.com');
+  // shell.openExternal('https://submarinemilk.com');
 });
 
 // Window controls IPC
