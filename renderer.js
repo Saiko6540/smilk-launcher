@@ -1785,7 +1785,7 @@ async function loadSettings() {
   configSettings = settings;
   
   // Calculate max safe RAM (leave 2GB for OS, max 32GB)
-  let maxSafeRam = Math.max(2, sysMem - 2);
+  let maxSafeRam = Math.floor(Math.max(2, sysMem - 2));
   if (maxSafeRam > 32) maxSafeRam = 32;
   
   settingsRam.max = maxSafeRam;
