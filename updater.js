@@ -135,7 +135,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         const repoMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)/);
         if (repoMatch) {
           const [_, owner, repo, branch, filepath] = repoMatch;
-          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${filepath}&page=1&per_page=1`;
+          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${filepath}&sha=${branch}&page=1&per_page=1`;
           try {
             const apiText = await new Promise((resolve, reject) => {
               https.get(apiUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
