@@ -3,6 +3,42 @@ const path = require('path');
 const fs = require('fs');
 const { checkAndInstallUpdate } = require('./updater');
 const { launchMinecraft } = require('./launcher');
+const { autoUpdater } = require('electron-updater');
+const DiscordRPC = require('discord-rpc');
+
+// --- Discord RPC Setup ---
+const clientId = '1525456449440845904'; // User provided Client ID
+let rpc;
+const startTimestamp = new Date();
+
+function initDiscordRPC() {
+  if (!clientId || clientId === '') return;
+  
+  DiscordRPC.register(clientId);
+  rpc = new DiscordRPC.Client({ transport: 'ipc' });
+
+  rpc.on('ready', () => {
+    setDiscordActivity({ details: 'В меню', state: 'Вибирає збірку' });
+    console.log('Discord RPC started');
+  });
+
+  rpc.login({ clientId }).catch(e => console.error('Discord RPC failed:', e.message));
+}
+
+function setDiscordActivity(data) {
+  if (!rpc) return;
+  try {
+    rpc.setActivity({
+      details: data.details,
+      state: data.state,
+      startTimestamp,
+      largeImageKey: 'icon', // Requires 'icon' asset uploaded to Discord portal
+      largeImageText: 'smilk launcher',
+      instance: false,
+    });
+  } catch (e) {}
+}
+// -------------------------
 
 let mainWindow;
 let consoleWindow;
@@ -164,6 +200,17 @@ function log(level, message) {
 
 app.whenReady().then(() => {
   createWindow();
+  initDiscordRPC();
+
+  // Check for auto-updates (silently in background)
+  autoUpdater.logger = console;
+  autoUpdater.logger.transports.file.level = 'info';
+  autoUpdater.checkForUpdatesAndNotify();
+
+  autoUpdater.on('update-downloaded', () => {
+    log('info', 'App update downloaded. It will be installed on quit.');
+    // Optionally: autoUpdater.quitAndInstall(); here if you want immediate restart
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -352,6 +399,20 @@ ipcMain.handle('start-launch', async (event, packKey) => {
     if (mainWindow) {
       mainWindow.webContents.send('launch-status', data);
     }
+    
+    // Discord RPC Update
+    if (data.status === 'game_started') {
+      setDiscordActivity({
+        details: `Грає: ${pack.name}`,
+        state: `Нікнейм: ${settings.nickname}`
+      });
+    } else if (data.status === 'game_exited' || data.status === 'error') {
+      setDiscordActivity({
+        details: 'В меню',
+        state: 'Вибирає збірку'
+      });
+    }
+
     if (consoleWindow && !consoleWindow.isDestroyed()) {
       if (data.status === 'game_running' || data.status === 'error') {
         let level = 'info';
