@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges">
+  <!-- Bucket Outline -->
+  <path fill="#404040" d="M3 2h10v2H3zM2 4h12v7H2zM3 11h10v2H3zM4 13h8v1H4zM5 14h6v1H5z"/>
+  <!-- Milk Liquid -->
+  <path fill="#F0F8FF" d="M4 3h8v2H4zM3 5h10v1H3z"/>
+  <path fill="#FFFFFF" d="M5 4h6v1H5zM4 5h8v1H4z"/>
+  <path fill="#DCEBF4" d="M4 3h1v1H4zM11 3h1v1h-1zM3 5h1v1H3zM12 5h1v1h-1z"/>
+  <!-- Bucket Exterior -->
+  <path fill="#8B8B8B" d="M3 6h10v5H3zM4 11h8v1H4zM5 12h6v1H5zM6 13h4v1H6z"/>
+  <!-- Bucket Highlights/Shadows -->
+  <path fill="#B4B4B4" d="M4 6h2v5H4zM5 11h1v1H5zM4 5h1v1H4zM5 5h3v1H5z"/>
+  <path fill="#D2D2D2" d="M5 6h1v5H5zM6 6h2v3H6z"/>
+  <path fill="#6E6E6E" d="M10 6h3v5h-3zM9 11h3v1H9zM7 12h4v1H7zM8 13h2v1H8z"/>
+  <path fill="#5A5A5A" d="M12 6h1v5h-1zM11 11h1v1h-1zM9 12h2v1H9zM10 13h1v1h-1z"/>
+</svg>
