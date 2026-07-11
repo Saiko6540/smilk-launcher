@@ -1447,29 +1447,29 @@ class Firefly {
   constructor() { this.reset(); }
   reset() {
     this.x = Math.random() * (canvas.width || 800);
-    this.y = Math.random() * (canvas.height || 600) * 0.75;
-    this.size = Math.random() * 4 + 3; // larger for pixel style
+    this.y = Math.random() * (canvas.height || 600) * 0.7;
+    this.size = Math.random() * 3 + 1.5;
     this.speed = Math.random() * 0.3 + 0.1;
     this.angle = Math.random() * Math.PI * 2;
     this.pulse = Math.random() * Math.PI * 2;
-    this.drift = Math.random() * 0.4 + 0.2;
+    this.drift = Math.random() * 0.5 + 0.2;
   }
   update() {
-    this.angle += this.speed * 0.03;
-    this.pulse += 0.07;
+    this.angle += this.speed * 0.02;
+    this.pulse += 0.05;
     this.x += Math.sin(this.angle) * this.drift;
-    this.y += Math.cos(this.angle * 0.8) * this.drift * 0.4;
-    if (this.x < -10 || this.x > canvas.width + 10 || this.y < -10 || this.y > canvas.height) this.reset();
+    this.y += Math.cos(this.angle * 0.7) * this.drift * 0.5;
+    if (this.x < -20 || this.x > canvas.width + 20 || this.y < -20 || this.y > canvas.height) this.reset();
   }
   draw() {
-    const glow = (Math.sin(this.pulse) + 1) * 0.5;
-    const sz = Math.floor(this.size);
-    // Draw outer glow square
-    ctx.fillStyle = `rgba(180, 255, 50, ${0.1 + glow * 0.25})`;
-    ctx.fillRect(Math.floor(this.x - sz - 2), Math.floor(this.y - sz - 2), sz * 2 + 4, sz * 2 + 4);
-    // Draw inner bright square
-    ctx.fillStyle = `rgba(220, 255, 100, ${0.7 + glow * 0.3})`;
-    ctx.fillRect(Math.floor(this.x - sz/2), Math.floor(this.y - sz/2), sz, sz);
+    const glow = Math.floor((Math.sin(this.pulse) + 1) * 1.5);
+    const size = Math.floor(this.size);
+    // Draw outer glow box
+    ctx.fillStyle = `rgba(180, 255, 50, ${0.1 + (Math.sin(this.pulse) + 1) * 0.15})`;
+    ctx.fillRect(Math.floor(this.x) - size - glow, Math.floor(this.y) - size - glow, (size + glow) * 2, (size + glow) * 2);
+    // Draw solid core pixel
+    ctx.fillStyle = `rgba(220, 255, 100, 0.85)`;
+    ctx.fillRect(Math.floor(this.x) - 1, Math.floor(this.y) - 1, 3, 3);
   }
 }
 
@@ -1478,199 +1478,158 @@ class FallingLeaf {
   reset() {
     this.x = Math.random() * (canvas.width || 800);
     this.y = -10;
-    this.size = Math.floor(Math.random() * 3 + 4); // square size in pixels
-    this.speedY = Math.random() * 0.6 + 0.3;
+    this.size = Math.random() * 4 + 3;
+    this.speedY = Math.random() * 0.8 + 0.3;
     this.speedX = Math.random() * 0.4 - 0.2;
+    this.rot = Math.random() * Math.PI * 2;
+    this.rotSpeed = (Math.random() - 0.5) * 0.03;
     this.sway = Math.random() * Math.PI * 2;
     this.swaySpeed = Math.random() * 0.02 + 0.01;
-    const leafColors = ['#2e7d32', '#388e3c', '#1b5e20', '#4caf50', '#8d6e63'];
+    const leafColors = ['#8B4513', '#A0522D', '#D2691E', '#2e7d32', '#388e3c', '#cc7722'];
     this.color = leafColors[Math.floor(Math.random() * leafColors.length)];
   }
   update() {
     this.y += this.speedY;
     this.sway += this.swaySpeed;
-    this.x += this.speedX + Math.sin(this.sway) * 0.4;
+    this.x += this.speedX + Math.sin(this.sway) * 0.5;
+    this.rot += this.rotSpeed;
     if (this.y > canvas.height + 10) this.reset();
   }
   draw() {
-    // Draw as a blocky pixelated leaf (rotated square)
     ctx.save();
     ctx.translate(Math.floor(this.x), Math.floor(this.y));
-    ctx.rotate(Math.floor(this.sway * 2) * (Math.PI / 4));
+    // Lock rotation to discrete angles to look like rotating pixels/blocks
+    const discreteRot = Math.floor(this.rot * 4) * (Math.PI / 2);
+    ctx.rotate(discreteRot);
     ctx.fillStyle = this.color;
-    ctx.fillRect(-this.size/2, -this.size/2, this.size, this.size);
+    // Draw blocky leaf
+    const size = Math.floor(this.size);
+    ctx.fillRect(-size, -Math.floor(size / 2), size * 2, size);
     ctx.restore();
   }
 }
-
-// Slime state
-let slimeX = 120;
-let slimeJumpTime = 0;
-
-// Creeper state
-let creeperX = 550;
-let creeperFrame = 0;
-let creeperDir = -1;
 
 function drawVanillaScene() {
   vanillaTime += 0.005;
   const W = canvas.width;
   const H = canvas.height;
-  const groundY = Math.floor(H * 0.78 / 8) * 8; // Snap to 8px pixel grid
+  const groundY = H * 0.78;
 
-  // === SKY (stepped dark blocky gradient) ===
-  const bands = 5;
-  const bandH = Math.floor(groundY / bands);
-  const skyColors = ['#040905', '#081408', '#0c1d0c', '#102710', '#143114'];
-  for (let i = 0; i < bands; i++) {
-    ctx.fillStyle = skyColors[i];
-    ctx.fillRect(0, i * bandH, W, bandH + 2);
+  // === DARK NIGHT SKY ===
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+  skyGrad.addColorStop(0, '#050a05');
+  skyGrad.addColorStop(0.3, '#0a1a0a');
+  skyGrad.addColorStop(0.6, '#102010');
+  skyGrad.addColorStop(1, '#1a3a1a');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, groundY);
+
+  // === STARS ===
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 97.3 + 30) % W;
+    const sy = (i * 53.1 + 10) % (H * 0.35);
+    const twinkle = (Math.sin(vanillaTime * 3 + i) + 1) * 0.3 + 0.2;
+    ctx.fillStyle = `rgba(255, 255, 230, ${twinkle})`;
+    ctx.fillRect(sx, sy, 2, 2);
   }
 
-  // === STARS (individual pixel blocks) ===
-  for (let i = 0; i < 25; i++) {
-    const sx = Math.floor((i * 143.5 + 40) % W / 4) * 4;
-    const sy = Math.floor((i * 71.3 + 15) % (groundY * 0.75) / 4) * 4;
-    const twinkle = Math.floor((Math.sin(vanillaTime * 4 + i) + 1) * 1.5);
-    if (twinkle > 0) {
-      ctx.fillStyle = `rgba(255, 255, 220, ${0.3 + twinkle * 0.2})`;
-      ctx.fillRect(sx, sy, 4, 4);
-    }
-  }
-
-  // === SQUARE MOON (Minecraft style) ===
-  const moonSize = 32;
-  const moonX = Math.floor((W * 0.85) / 4) * 4;
-  const moonY = Math.floor((H * 0.15) / 4) * 4;
-  // Outer faint glow square
-  ctx.fillStyle = 'rgba(230, 230, 200, 0.08)';
-  ctx.fillRect(moonX - 10, moonY - 10, moonSize + 20, moonSize + 20);
-  // Main square moon
-  ctx.fillStyle = '#ffffe0';
-  ctx.fillRect(moonX, moonY, moonSize, moonSize);
-  // Moon details
-  ctx.fillStyle = '#dcdcb0';
-  ctx.fillRect(moonX + 4, moonY + 4, 8, 8);
-  ctx.fillRect(moonX + 16, moonY + 16, 8, 8);
-  ctx.fillRect(moonX + 20, moonY + 8, 4, 4);
-
-  // === DISTANT MINECRAFT TREES (Layer 1) ===
-  ctx.fillStyle = '#071107';
-  for (let i = 10; i < W; i += 60) {
-    const treeH = 64 + Math.floor(Math.sin(i * 0.05) * 16 / 8) * 8;
-    ctx.fillRect(i + 12, groundY - treeH, 8, treeH);
-    ctx.fillRect(i, groundY - treeH - 32, 32, 32);
-    ctx.fillRect(i + 4, groundY - treeH - 40, 24, 8);
-  }
-
-  // === CLOSER MINECRAFT TREES (Layer 2) ===
-  ctx.fillStyle = '#0a1a0a';
-  for (let i = 35; i < W; i += 120) {
-    const treeH = 96 + Math.floor(Math.sin(i * 0.03 + 2) * 24 / 8) * 8;
-    ctx.fillStyle = '#2d1a0e';
-    ctx.fillRect(i + 16, groundY - treeH, 16, treeH);
-    ctx.fillStyle = '#0f2f0f';
-    ctx.fillRect(i - 16, groundY - treeH - 48, 80, 48);
-    ctx.fillRect(i - 8, groundY - treeH - 64, 64, 16);
-    ctx.fillStyle = '#153f15';
-    ctx.fillRect(i, groundY - treeH - 40, 48, 32);
-  }
-
-  // === DUNGEON PORTAL / TEMPLE (Center) ===
-  const dX = Math.floor((W * 0.5 - 60) / 8) * 8;
-  const dY = groundY;
+  // === SQUARE MOON ===
+  const moonX = W * 0.82;
+  const moonY = H * 0.12;
+  const moonSize = 25;
   
-  ctx.fillStyle = '#3a3d3b';
-  ctx.fillRect(dX, dY - 72, 120, 72);
-  ctx.fillStyle = '#0d0d0d';
-  ctx.fillRect(dX + 24, dY - 56, 72, 56);
+  // Outer square glow
+  ctx.fillStyle = 'rgba(230, 230, 200, 0.12)';
+  ctx.fillRect(moonX - moonSize - 6, moonY - moonSize - 6, (moonSize + 6) * 2, (moonSize + 6) * 2);
+  
+  // Base moon square
+  ctx.fillStyle = '#e8e8d0';
+  ctx.fillRect(moonX - moonSize, moonY - moonSize, moonSize * 2, moonSize * 2);
+  
+  // Blocky shadow overlay to create crescent moon effect
+  ctx.fillStyle = '#050a05';
+  ctx.fillRect(moonX - moonSize + 10, moonY - moonSize - 2, moonSize * 2, moonSize * 2 + 4);
 
-  ctx.fillStyle = '#515452';
-  ctx.fillRect(dX + 8, dY - 64, 16, 16);
-  ctx.fillRect(dX + 96, dY - 48, 16, 16);
-  ctx.fillRect(dX + 48, dY - 72, 24, 8);
-  ctx.fillStyle = '#274427';
-  ctx.fillRect(dX, dY - 32, 16, 16);
-  ctx.fillRect(dX + 104, dY - 64, 16, 16);
-  ctx.fillRect(dX + 32, dY - 72, 16, 8);
+  // === DISTANT FOREST SILHOUETTES ===
+  ctx.fillStyle = '#0a150a';
+  for (let i = 0; i < W; i += 45) {
+    const treeH = 50 + Math.sin(i * 0.05) * 25 + Math.cos(i * 0.08) * 15;
+    const tx = i + 17;
+    const ty = groundY - treeH;
+    ctx.fillRect(i, ty, 35, treeH);
+    // Blocky spruce tree layers
+    ctx.fillRect(tx - 15, ty - 8, 30, 8);
+    ctx.fillRect(tx - 10, ty - 16, 20, 8);
+    ctx.fillRect(tx - 5, ty - 24, 10, 8);
+  }
 
-  const runeGlow = (Math.sin(vanillaTime * 5) + 1) * 0.5;
-  ctx.fillStyle = `rgba(34, 197, 94, ${0.4 + runeGlow * 0.6})`;
-  ctx.fillRect(dX + 8, dY - 48, 8, 8);
-  ctx.fillRect(dX + 8, dY - 24, 8, 8);
-  ctx.fillRect(dX + 104, dY - 48, 8, 8);
-  ctx.fillRect(dX + 104, dY - 24, 8, 8);
-  ctx.fillRect(dX + 56, dY - 68, 8, 4);
+  // === CLOSER TREES ===
+  ctx.fillStyle = '#0d1f0d';
+  for (let i = 20; i < W; i += 100) {
+    const treeH = 80 + Math.sin(i * 0.03 + 1) * 30;
+    const tx = i + 17;
+    const ty = groundY - treeH;
+    ctx.fillRect(i + 10, ty, 15, treeH); // Trunk
+    
+    // Blocky canopy steps
+    ctx.fillRect(tx - 25, ty - 12, 50, 12);
+    ctx.fillRect(tx - 18, ty - 24, 36, 12);
+    ctx.fillRect(tx - 10, ty - 36, 20, 12);
+    ctx.fillRect(tx - 5, ty - 46, 10, 10);
+  }
 
-  const eyeGlow = (Math.sin(vanillaTime * 2.5) + 1) * 0.5;
-  ctx.fillStyle = `rgba(239, 68, 68, ${0.5 + eyeGlow * 0.5})`;
-  ctx.fillRect(dX + 40, dY - 32, 6, 3);
-  ctx.fillRect(dX + 50, dY - 32, 6, 3);
-
-  ctx.fillStyle = `rgba(168, 85, 247, ${0.6 + eyeGlow * 0.4})`;
-  ctx.fillRect(dX + 68, dY - 44, 8, 2);
+  // === DUNGEON ENTRANCE (center) ===
+  const dX = W * 0.5 - 50;
+  const dY = groundY - 5;
+  // Stone archway
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(dX, dY - 60, 15, 60);
+  ctx.fillRect(dX + 85, dY - 60, 15, 60);
+  ctx.fillRect(dX, dY - 70, 100, 15);
+  // Darker arch
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(dX + 5, dY - 65, 10, 5);
+  ctx.fillRect(dX + 85, dY - 65, 10, 5);
+  // Dark inside
+  ctx.fillStyle = '#050505';
+  ctx.fillRect(dX + 15, dY - 55, 70, 55);
+  // Glowing runes on sides
+  const runeGlow = (Math.sin(vanillaTime * 4) + 1) * 0.5;
+  ctx.fillStyle = `rgba(76, 175, 80, ${0.3 + runeGlow * 0.5})`;
+  ctx.fillRect(dX + 3, dY - 45, 8, 3);
+  ctx.fillRect(dX + 3, dY - 35, 8, 3);
+  ctx.fillRect(dX + 3, dY - 25, 8, 3);
+  ctx.fillRect(dX + 89, dY - 45, 8, 3);
+  ctx.fillRect(dX + 89, dY - 35, 8, 3);
+  ctx.fillRect(dX + 89, dY - 25, 8, 3);
+  // Glowing eyes inside
+  const eyeGlow = (Math.sin(vanillaTime * 2 + 1) + 1) * 0.5;
+  ctx.fillStyle = `rgba(255, 50, 50, ${0.4 + eyeGlow * 0.6})`;
+  ctx.fillRect(dX + 35, dY - 35, 4, 4);
+  ctx.fillRect(dX + 55, dY - 35, 4, 4);
 
   // === GROUND ===
-  ctx.fillStyle = '#3f7f3f';
-  ctx.fillRect(0, groundY, W, 16);
-  
-  ctx.fillStyle = '#2f5f2f';
-  for (let x = 0; x < W; x += 16) {
-    if ((x / 16) % 2 === 0) {
-      ctx.fillRect(x, groundY + 16, 16, 8);
-    }
+  const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
+  groundGrad.addColorStop(0, '#1a3a1a');
+  groundGrad.addColorStop(0.3, '#152a15');
+  groundGrad.addColorStop(1, '#0a1a0a');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, groundY, W, H - groundY);
+
+  // Grass tufts
+  ctx.fillStyle = '#2e7d32';
+  for (let i = 0; i < W; i += 12) {
+    const h = 4 + Math.sin(i + vanillaTime * 2) * 2;
+    ctx.fillRect(i, groundY - h, 3, h);
   }
 
-  ctx.fillStyle = '#573d26';
-  ctx.fillRect(0, groundY + 24, W, H - groundY - 24);
-  
-  ctx.fillStyle = '#45301e';
-  for (let i = 0; i < 20; i++) {
-    const bx = Math.floor((i * 123.7) % W / 16) * 16;
-    const by = groundY + 32 + Math.floor((i * 47.9) % (H - groundY - 48) / 8) * 8;
-    ctx.fillRect(bx, by, 16, 8);
+  // === PATH (stone bricks) ===
+  ctx.fillStyle = '#4a4a4a';
+  for (let i = 0; i < 6; i++) {
+    const px = dX + 25 + i * 8;
+    ctx.fillRect(px, dY, 6, 4);
+    ctx.fillRect(px + 3, dY + 5, 6, 4);
   }
-
-  // === DYNAMIC MOBS ===
-  slimeJumpTime += 0.04;
-  const slimeJumpH = Math.max(0, Math.sin(slimeJumpTime) * 40);
-  const slimeCurY = groundY - 16 - slimeJumpH;
-  slimeX += 0.3;
-  if (slimeX > W + 32) slimeX = -32;
-  
-  ctx.fillStyle = 'rgba(90, 220, 90, 0.75)';
-  ctx.fillRect(Math.floor(slimeX), Math.floor(slimeCurY), 16, 16);
-  ctx.fillStyle = 'rgba(60, 180, 60, 0.9)';
-  ctx.fillRect(Math.floor(slimeX + 4), Math.floor(slimeCurY + 4), 8, 8);
-  ctx.fillStyle = '#1e3f1e';
-  ctx.fillRect(Math.floor(slimeX + 3), Math.floor(slimeCurY + 4), 3, 3);
-  ctx.fillRect(Math.floor(slimeX + 10), Math.floor(slimeCurY + 4), 3, 3);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(Math.floor(slimeX + 3), Math.floor(slimeCurY + 3), 1, 1);
-  ctx.fillRect(Math.floor(slimeX + 10), Math.floor(slimeCurY + 3), 1, 1);
-
-  creeperX += 0.4 * creeperDir;
-  if (creeperX < 40 || creeperX > W - 60) creeperDir *= -1;
-  
-  creeperFrame += 0.1;
-  const legOffset = Math.sin(creeperFrame) * 3;
-  const crX = Math.floor(creeperX);
-  const crY = groundY - 32;
-
-  ctx.fillStyle = '#1f8f1f';
-  ctx.fillRect(crX + 4, crY - 12, 12, 12);
-  ctx.fillStyle = '#0a0a0a';
-  ctx.fillRect(crX + 6, crY - 9, 3, 3);
-  ctx.fillRect(crX + 11, crY - 9, 3, 3);
-  ctx.fillRect(crX + 8, crY - 6, 4, 6);
-  ctx.fillRect(crX + 7, crY - 4, 6, 4);
-
-  ctx.fillStyle = '#156f15';
-  ctx.fillRect(crX + 6, crY, 8, 16);
-
-  ctx.fillStyle = '#0f4f0f';
-  ctx.fillRect(crX + 4 + Math.max(0, legOffset), crY + 16, 4, 6);
-  ctx.fillRect(crX + 12 - Math.max(0, -legOffset), crY + 16, 4, 6);
 
   // === FIREFLIES ===
   if (fireflies.length === 0) {
