@@ -18,7 +18,7 @@ function initDiscordRPC() {
   rpc = new DiscordRPC.Client({ transport: 'ipc' });
 
   rpc.on('ready', () => {
-    setDiscordActivity({ details: 'В меню', state: 'Вибирає збірку' });
+    setDiscordActivity({ details: 'In Menu', state: 'Choosing modpack' });
     console.log('Discord RPC started');
   });
 
@@ -403,13 +403,13 @@ ipcMain.handle('start-launch', async (event, packKey) => {
     // Discord RPC Update
     if (data.status === 'game_started') {
       setDiscordActivity({
-        details: `Грає: ${pack.name}`,
-        state: `Нікнейм: ${settings.nickname}`
+        details: `Playing: ${pack.name}`,
+        state: `Nickname: ${settings.nickname}`
       });
     } else if (data.status === 'game_exited' || data.status === 'error') {
       setDiscordActivity({
-        details: 'В меню',
-        state: 'Вибирає збірку'
+        details: 'In Menu',
+        state: 'Choosing modpack'
       });
     }
 
