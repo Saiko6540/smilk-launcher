@@ -62,7 +62,7 @@ const modpacks = {
     name: 'Create: Stranded at sea',
     mcVersion: '1.20.1',
     loader: 'fabric-0.15.11',
-    configUrl: 'https://raw.githubusercontent.com/Saiko/stranded-at-sea/main/version.json',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/sea/modpack_test_1.0.0.mrpack',
     mockConfig: {
       version: '1.2.0',
       minecraft: '1.20.1',
@@ -74,7 +74,7 @@ const modpacks = {
     name: 'Create: Democky edition',
     mcVersion: '1.20.1',
     loader: 'forge-47.2.0',
-    configUrl: 'https://raw.githubusercontent.com/Saiko/democky-edition/main/version.json',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/createplus/modpack_test_1.0.0.mrpack',
     mockConfig: {
       version: '1.0.5',
       minecraft: '1.20.1',
@@ -86,7 +86,7 @@ const modpacks = {
     name: 'Cobblemon',
     mcVersion: '1.20.1',
     loader: 'fabric-0.15.11',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/main/modpack_test_1.0.0.mrpack',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/cobblemon/modpack_test_1.0.0.mrpack',
     mockConfig: {
       version: '2.1.0',
       minecraft: '1.20.1',
@@ -98,7 +98,7 @@ const modpacks = {
     name: 'Vanilla+',
     mcVersion: '1.21.1',
     loader: 'fabric-0.16.5',
-    configUrl: 'https://raw.githubusercontent.com/Saiko/vanilla-plus/main/version.json',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/vanilla+/Super%20vanilla.mrpack',
     mockConfig: {
       version: '1.0.0',
       minecraft: '1.21.1',
