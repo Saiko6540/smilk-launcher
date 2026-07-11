@@ -1804,7 +1804,7 @@ async function loadSettings() {
   
   // Cap current selection if it exceeds system capabilities or falls below minimum
   if (settings.ramGb > maxSafeRam) settings.ramGb = maxSafeRam;
-  if (settings.ramGb < 6) settings.ramGb = 6;
+  if (settings.ramGb < 2) settings.ramGb = 2;
   
   // Sync fields
   usernameInput.value = settings.nickname;
