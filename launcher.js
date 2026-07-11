@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const { Client, Authenticator } = require('minecraft-launcher-core');
 
 /**
@@ -156,11 +156,69 @@ async function installForge(mcVersion, forgeVersion, instanceDir, javaPath, send
   return customVersionId;
 }
 
+function checkJavaVersion(javaPath, mcVersion) {
+  return new Promise((resolve, reject) => {
+    let minJavaVersion = 8;
+    try {
+      const parts = mcVersion.split('.');
+      const mcMinor = parseInt(parts[1], 10);
+      const mcPatch = parseInt(parts[2] || '0', 10);
+      
+      if (mcMinor >= 21 || (mcMinor === 20 && mcPatch >= 5)) {
+        minJavaVersion = 21;
+      } else if (mcMinor >= 17) {
+        minJavaVersion = 17;
+      }
+    } catch(e) {}
+    
+    const javaExeForCheck = javaPath.toLowerCase().endsWith('javaw.exe') 
+      ? javaPath.replace(/javaw\.exe$/i, 'java.exe') 
+      : (javaPath === 'javaw' ? 'java' : javaPath);
+
+    exec(`"${javaExeForCheck}" -version`, (error, stdout, stderr) => {
+      if (error) {
+         return reject(new Error(`Failed to check Java version. Is Java installed correctly? Path: ${javaPath}`));
+      }
+      const output = stderr || stdout;
+      const match = output.match(/(?:java|openjdk) version "([^"]+)"/);
+      if (match) {
+        let versionStr = match[1];
+        let major = 0;
+        if (versionStr.startsWith('1.')) {
+          major = parseInt(versionStr.split('.')[1], 10);
+        } else {
+          major = parseInt(versionStr.split('.')[0], 10);
+        }
+        if (major > 0 && major < minJavaVersion) {
+          return reject(new Error(`Minecraft ${mcVersion} requires Java ${minJavaVersion} or later, but you are using Java ${major}.\n\nPlease update your Java or change the Java Path in Settings.`));
+        }
+        resolve(major);
+      } else {
+        // Could not parse, just resolve to allow launching
+        resolve(0);
+      }
+    });
+  });
+}
+
 /**
  * Launches Minecraft using minecraft-launcher-core
  */
 async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, mcVersion, loaderString, sendProgress) {
   let customVersionId = null;
+
+  // Determine correct java executable to avoid console window popup
+  let finalJavaPath = javaPath;
+  if (!finalJavaPath) {
+    finalJavaPath = process.platform === 'win32' ? 'javaw' : 'java';
+  } else if (process.platform === 'win32' && finalJavaPath.toLowerCase().endsWith('java.exe')) {
+    // If user selected java.exe, try to quietly replace it with javaw.exe
+    finalJavaPath = finalJavaPath.replace(/java\.exe$/i, 'javaw.exe');
+  }
+
+  // Check Java version
+  sendProgress({ status: 'checking', message: 'Checking Java version...' });
+  await checkJavaVersion(finalJavaPath, mcVersion);
 
   // Process loader
   if (loaderString && loaderString.startsWith('fabric-')) {
@@ -183,15 +241,6 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
   if (jvmArgs && jvmArgs.trim()) {
     customArgs = jvmArgs.trim().split(/\s+/);
   }
-
-    // Determine correct java executable to avoid console window popup
-    let finalJavaPath = javaPath;
-    if (!finalJavaPath) {
-      finalJavaPath = process.platform === 'win32' ? 'javaw' : 'java';
-    } else if (process.platform === 'win32' && finalJavaPath.toLowerCase().endsWith('java.exe')) {
-      // If user selected java.exe, try to quietly replace it with javaw.exe
-      finalJavaPath = finalJavaPath.replace(/java\.exe$/i, 'javaw.exe');
-    }
 
     const opts = {
       authorization: Authenticator.getAuth(nickname || 'Player'),
