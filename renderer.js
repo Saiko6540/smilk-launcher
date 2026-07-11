@@ -1702,8 +1702,32 @@ async function checkServerStatus(packKey) {
       const data = await response.json();
       
       if (data.online) {
-        serverStatusDot.className = 'status-dot online';
-        serverStatusText.textContent = `${data.players.online}/${data.players.max} Online`;
+        // MOTD Synchronization
+        const motd = data.motd?.clean?.trim() || "";
+        const motdPackMapping = {
+          '0': 'vanilla_plus',
+          '1': 'stranded_at_sea',
+          '2': 'democky_edition',
+          '3': 'cobblemon'
+        };
+        
+        // Find if motd starts with or contains our target numbers
+        let serverPack = null;
+        for (const [key, packName] of Object.entries(motdPackMapping)) {
+          // Strict check: MOTD is exactly the digit, or starts with the digit and a space/separator
+          if (motd === key || motd.startsWith(`${key} `) || motd.startsWith(`[${key}]`)) {
+            serverPack = packName;
+            break;
+          }
+        }
+
+        if (serverPack && serverPack !== packKey) {
+          serverStatusDot.className = 'status-dot offline'; // Using offline (red) dot to indicate mismatch
+          serverStatusText.textContent = `Server is on ${packDetails[serverPack].title}`;
+        } else {
+          serverStatusDot.className = 'status-dot online';
+          serverStatusText.textContent = `${data.players.online}/${data.players.max} Online`;
+        }
       } else {
         serverStatusDot.className = 'status-dot offline';
         serverStatusText.textContent = 'Offline';
