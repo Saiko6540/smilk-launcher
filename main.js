@@ -35,8 +35,10 @@ function setDiscordActivity(data) {
       largeImageKey: 'icon',
       largeImageText: 'smilk launcher',
       instance: false,
-    });
-  } catch (e) {}
+    }).catch(e => console.error('SetActivity Error:', e));
+  } catch (e) {
+    console.error('setDiscordActivity try/catch Error:', e);
+  }
 }
 // -------------------------
 
