@@ -1809,6 +1809,7 @@ function updateUserAvatar(name) {
 }
 
 function updateModeBadge(isMock) {
+  if (!modeBadge) return;
   if (isMock) {
     modeBadge.textContent = 'Developer Mode';
     modeBadge.classList.remove('off');
