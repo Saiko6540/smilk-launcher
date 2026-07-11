@@ -312,6 +312,15 @@ ipcMain.on('open-website', () => {
   // shell.openExternal('https://submarinemilk.com');
 });
 
+// Open game directory externally
+ipcMain.on('open-instances-dir', () => {
+  const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+  if (!fs.existsSync(instancesDir)) {
+    fs.mkdirSync(instancesDir, { recursive: true });
+  }
+  shell.openPath(instancesDir);
+});
+
 // Window controls IPC
 ipcMain.on('window-minimize', () => {
   if (mainWindow) mainWindow.minimize();

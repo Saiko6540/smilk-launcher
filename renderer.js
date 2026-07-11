@@ -70,6 +70,7 @@ const settingsMock = document.getElementById('settings-mock');
 const settingsSaveBtn = document.getElementById('settings-save');
 const settingsResetBtn = document.getElementById('settings-reset-btn');
 const settingsClearBtn = document.getElementById('settings-clear-btn');
+const openInstancesBtn = document.getElementById('open-instances-btn');
 
 // Website & Debug Buttons
 const websiteBtn = document.getElementById('website-btn');

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   startLaunch: (packKey) => ipcRenderer.invoke('start-launch', packKey),
   openWebsite: () => ipcRenderer.send('open-website'),
   openConsoleWindow: () => ipcRenderer.send('open-console-window'),
+  openInstancesDir: () => ipcRenderer.send('open-instances-dir'),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   maximizeWindow: () => ipcRenderer.send('window-maximize'),
   closeWindow: () => ipcRenderer.send('window-close'),
