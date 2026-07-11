@@ -179,6 +179,19 @@ body.fade-out {
   border: 1px solid rgba(255, 255, 255, 0.03);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+}
+
+.modpack-item.server-active::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 10px;
+  height: 10px;
+  background-color: #22c55e;
+  border-radius: 50%;
+  animation: pulse-green 2s infinite;
 }
 
 .modpack-item:hover {

@@ -1721,6 +1721,18 @@ async function checkServerStatus(packKey) {
           }
         }
 
+        // Highlight the server's active pack in the sidebar
+        document.querySelectorAll('.modpack-item').forEach(item => {
+          item.classList.remove('server-active');
+        });
+        if (serverPack) {
+          const activeItem = document.querySelector(`.modpack-item[data-pack="${serverPack}"]`);
+          if (activeItem) activeItem.classList.add('server-active');
+        }
+
+        // Sort the list based on server pack and last played time
+        sortModpacks(serverPack);
+
         if (serverPack && serverPack !== packKey) {
           serverStatusDot.className = 'status-dot offline'; // Using offline (red) dot to indicate mismatch
           serverStatusText.textContent = `Server is on ${packDetails[serverPack].title}`;
@@ -1939,6 +1951,10 @@ playBtn.addEventListener('click', async () => {
     return;
   }
 
+  // Update last played timestamp and re-sort
+  localStorage.setItem('lastPlayed_' + activePack, Date.now());
+  sortModpacks();
+
   // Go to updating process
   launcherState = 'updating';
   playBtn.disabled = true;
@@ -2070,11 +2086,42 @@ async function initApp() {
   initParticles();
   animate();
   
-  // Switch to default modpack (Stranded)
-  switchModpack('stranded_at_sea');
-  
   // Load local client settings configuration
   await loadSettings();
+
+  // Sort modpacks based on last played initially
+  sortModpacks();
+
+  // Switch to default modpack (Stranded)
+  switchModpack('stranded_at_sea');
+}
+
+// Sort modpacks in the UI
+function sortModpacks(activeServerPack = null) {
+  const listContainer = document.querySelector('.modpack-list');
+  if (!listContainer) return;
+  const items = Array.from(listContainer.querySelectorAll('.modpack-item'));
+  
+  items.sort((a, b) => {
+    const packA = a.dataset.pack;
+    const packB = b.dataset.pack;
+    
+    // Priority 1: Currently running on server
+    if (activeServerPack) {
+      if (packA === activeServerPack) return -1;
+      if (packB === activeServerPack) return 1;
+    }
+    
+    // Priority 2: Recently launched
+    const timeA = parseInt(localStorage.getItem('lastPlayed_' + packA) || '0', 10);
+    const timeB = parseInt(localStorage.getItem('lastPlayed_' + packB) || '0', 10);
+    
+    // Sort descending (most recent first)
+    return timeB - timeA;
+  });
+  
+  // Re-append to container in new order
+  items.forEach(item => listContainer.appendChild(item));
 }
 
 // Modpack Click List Handlers
