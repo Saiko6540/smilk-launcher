@@ -1,0 +1,28 @@
+{
+  "name": "smilk-launcher",
+  "version": "1.0.0",
+  "description": "Custom Minecraft Launcher with dynamic animated themes",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "com.smilk.launcher",
+    "productName": "smilk launcher",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.14",
+    "minecraft-launcher-core": "^3.18.2"
+  },
+  "devDependencies": {
+    "electron": "^31.2.0",
+    "electron-builder": "^24.13.3"
+  }
+}

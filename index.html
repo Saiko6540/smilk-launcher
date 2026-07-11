@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>smilk launcher</title>
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="style.css">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body class="theme-cobblemon">
+  <!-- Animated Background Canvas -->
+  <canvas id="animation-canvas"></canvas>
+  <div class="backdrop-glow"></div>
+
+  <!-- Custom Window Title Bar -->
+  <div class="window-title-bar">
+    <div class="title-bar-drag-area">
+      <img src="icon.png" class="title-logo-img" alt="logo">
+      <span class="title-text">Submarine Milk Launcher</span>
+    </div>
+    <div class="title-bar-controls">
+      <button id="win-minimize" class="control-btn" title="Minimize">—</button>
+      <button id="win-maximize" class="control-btn" title="Maximize">▢</button>
+      <button id="win-close" class="control-btn close-btn-title" title="Close">&times;</button>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-icon">🥛</div>
+        <div class="brand">
+          <span class="brand-sub">SUBMARINE</span>
+          <span class="brand-main">MILK</span>
+        </div>
+      </div>
+
+      <nav class="modpack-list">
+        <div class="modpack-item" data-pack="stranded_at_sea">
+          <div class="modpack-icon">🌊</div>
+          <div class="modpack-info">
+            <span class="modpack-name">Stranded at sea</span>
+            <span class="modpack-meta">Create • Survival</span>
+          </div>
+        </div>
+
+        <div class="modpack-item" data-pack="democky_edition">
+          <div class="modpack-icon">⚙️</div>
+          <div class="modpack-info">
+            <span class="modpack-name">Democky edition</span>
+            <span class="modpack-meta">Create • Steampunk</span>
+          </div>
+        </div>
+
+        <div class="modpack-item active" data-pack="cobblemon">
+          <div class="modpack-icon">⚡</div>
+          <div class="modpack-info">
+            <span class="modpack-name">Cobblemon</span>
+            <span class="modpack-meta">Pokemon • Minecraft</span>
+          </div>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="website-btn" class="footer-btn" title="Visit Website">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <span>Website</span>
+        </button>
+        <button id="settings-btn" class="footer-btn" title="Settings">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Dashboard -->
+    <main class="dashboard">
+      <!-- Modpack Info Card -->
+      <section class="pack-display">
+        <div class="pack-badge">SELECTED MODPACK</div>
+        <h1 id="pack-title" class="pack-title">Cobblemon</h1>
+        <p id="pack-description" class="pack-description">
+          Catch them all in Minecraft! A fully integrated Pokemon experience, with high quality animations, custom battles, and modern style.
+        </p>
+
+        <div class="pack-stats">
+          <div class="stat-pill">
+            <span class="stat-label">Minecraft</span>
+            <span id="stat-mc-ver" class="stat-value">1.21.1</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Loader</span>
+            <span id="stat-loader" class="stat-value">Fabric-0.18.4</span>
+          </div>
+          <div class="stat-pill">
+            <span class="stat-label">Installed Version</span>
+            <span id="stat-local-ver" class="stat-value">Checking...</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bottom Control Bar -->
+      <footer class="control-bar">
+        <div class="user-widget">
+          <div class="user-avatar" id="avatar-preview">P</div>
+          <div class="user-details">
+            <span class="nickname-label">✏️ Your nickname</span>
+            <input type="text" id="username-input" class="username-inline" value="Player" placeholder="Enter nickname...">
+          </div>
+        </div>
+
+        <div class="action-widget">
+          <button id="play-btn" class="play-button">
+            <div class="btn-glow"></div>
+            <div class="btn-ripple"></div>
+            <span id="btn-text">PLAY</span>
+          </button>
+          <div class="progress-container hidden" id="download-progress-container">
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-info">
+              <span id="progress-status">Downloading Sodium.jar...</span>
+              <span id="progress-percentage">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="launcher-info">
+          <span class="info-label off" id="mode-badge">Production</span>
+          <span class="info-version">Launcher v1.0.0</span>
+          <span class="info-author">by saiko</span>
+        </div>
+      </footer>
+
+
+    </main>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay hidden" id="settings-modal">
+    <div class="settings-card">
+      <div class="modal-header">
+        <h2>Launcher Configuration</h2>
+        <button class="close-btn" id="modal-close">&times;</button>
+      </div>
+      
+      <div class="modal-body">
+        <!-- Nickname -->
+        <div class="form-group">
+          <label for="settings-nickname">Nickname Authorization</label>
+          <input type="text" id="settings-nickname" placeholder="Player">
+          <span class="form-tip">Used to identify you in game (Offline Mode).</span>
+        </div>
+
+        <!-- RAM Allocation -->
+        <div class="form-group">
+          <div class="label-row">
+            <label for="settings-ram">RAM Allocation</label>
+            <span id="ram-value">12 GB</span>
+          </div>
+          <div class="range-container">
+            <input type="range" id="settings-ram" min="6" max="32" step="1" value="12">
+            <div class="range-labels">
+              <span>6 GB</span>
+              <span>12 GB</span>
+              <span>18 GB</span>
+              <span>24 GB</span>
+              <span>32 GB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Java Path -->
+        <div class="form-group">
+          <label for="settings-java">Custom Java Executable</label>
+          <div class="input-with-button">
+            <input type="text" id="settings-java" placeholder="Auto-detecting system Java...">
+            <button id="browse-java-btn">Browse</button>
+          </div>
+          <span class="form-tip">Leave blank to use the default system Java. Required for Forge.</span>
+        </div>
+
+        <!-- JVM Arguments -->
+        <div class="form-group">
+          <label for="settings-args">JVM Launch Arguments</label>
+          <textarea id="settings-args" rows="3" placeholder="-XX:+UseG1GC..."></textarea>
+          <span class="form-tip">Advanced settings. Standard arguments are filled by default.</span>
+        </div>
+
+        <!-- Mock Mode Toggle -->
+        <div class="form-group row-group">
+          <div>
+            <label>Developer Mode</label>
+            <span class="form-tip">Enables advanced logging and debugging tools.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="settings-mock">
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="form-group">
+          <label style="color: #ff5252;">Danger Zone</label>
+          <div style="display: flex; gap: 10px; margin-top: 5px;">
+            <button id="settings-reset-btn" class="danger-btn">Reset Settings</button>
+            <button id="settings-clear-btn" class="danger-btn">Delete All Game Versions</button>
+          </div>
+          <span class="form-tip">These actions cannot be undone.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="debug-btn" class="secondary-btn" title="Open Debug Console" style="display: none;">Open Logs</button>
+        <button id="settings-save" class="save-btn">Apply Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
