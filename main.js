@@ -498,24 +498,25 @@ ipcMain.handle('install-java', async (event, requiredVersion) => {
   const zipPath = path.join(javaDir, `jre_${requiredVersion}.zip`);
   const apiUrl = `https://api.adoptium.net/v3/binary/latest/${requiredVersion}/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk`;
 
-  // Download ZIP
-  await new Promise((resolve, reject) => {
-    https.get(apiUrl, (res) => {
-      if (res.statusCode === 302 || res.statusCode === 301) {
-        https.get(res.headers.location, (redirectRes) => {
-          const file = fs.createWriteStream(zipPath);
-          redirectRes.pipe(file);
+  // Download ZIP with redirect support
+  function downloadFile(url, dest) {
+    return new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          downloadFile(res.headers.location, dest).then(resolve).catch(reject);
+        } else if (res.statusCode === 200) {
+          const file = fs.createWriteStream(dest);
+          res.pipe(file);
           file.on('finish', () => { file.close(); resolve(); });
           file.on('error', reject);
-        }).on('error', reject);
-      } else {
-        const file = fs.createWriteStream(zipPath);
-        res.pipe(file);
-        file.on('finish', () => { file.close(); resolve(); });
-        file.on('error', reject);
-      }
-    }).on('error', reject);
-  });
+        } else {
+          reject(new Error(`Failed to download: Status Code ${res.statusCode}`));
+        }
+      }).on('error', reject);
+    });
+  }
+
+  await downloadFile(apiUrl, zipPath);
 
   // Extract ZIP
   const zip = new AdmZip(zipPath);
