@@ -4,19 +4,22 @@ const packDetails = {
     title: 'Create: Stranded at sea',
     description: 'An epic oceanic survival adventure built around the Create mod. Automate massive machinery and systems in the middle of a vast waterworld.',
     mcVersion: '1.20.1',
-    loader: 'Fabric-0.15.11'
+    loader: 'Fabric-0.15.11',
+    serverIp: '185.206.149.27:25601'
   },
   democky_edition: {
     title: 'Create: Democky edition',
     description: 'Steampunk machinery combined with extreme survival on land. Build complex clockwork railways, steam factories, and automate everything.',
     mcVersion: '1.20.1',
-    loader: 'Forge-47.2.0'
+    loader: 'Forge-47.2.0',
+    serverIp: '185.206.149.27:25601'
   },
   cobblemon: {
     title: 'Cobblemon',
     description: 'Catch them all in Minecraft! A fully integrated Pokemon experience, with high quality animations, custom battles, and modern style.',
     mcVersion: '1.20.1',
-    loader: 'Fabric-0.15.11'
+    loader: 'Fabric-0.15.11',
+    serverIp: '185.206.149.27:25601'
   }
 };
 
@@ -39,6 +42,9 @@ const progressFill = document.getElementById('progress-fill');
 const progressStatus = document.getElementById('progress-status');
 const progressPercentage = document.getElementById('progress-percentage');
 const modeBadge = document.getElementById('mode-badge');
+
+const serverStatusDot = document.getElementById('server-status-dot');
+const serverStatusText = document.getElementById('server-status-text');
 
 const usernameInput = document.getElementById('username-input');
 const avatarPreview = document.getElementById('avatar-preview');
@@ -1452,6 +1458,47 @@ function switchModpack(packKey) {
 
   // Fetch local version info
   updateVersionCheck();
+  
+  // Fetch server status
+  checkServerStatus(packKey);
+}
+
+// Global server status interval
+let serverStatusInterval = null;
+
+async function checkServerStatus(packKey) {
+  const details = packDetails[packKey];
+  if (!details || !details.serverIp) return;
+
+  // Clear previous interval if any
+  if (serverStatusInterval) clearInterval(serverStatusInterval);
+
+  const fetchStatus = async () => {
+    try {
+      serverStatusDot.className = 'status-dot';
+      serverStatusText.textContent = 'Pinging...';
+      
+      const response = await fetch(`https://api.mcstatus.io/v2/status/java/${details.serverIp}`);
+      const data = await response.json();
+      
+      if (data.online) {
+        serverStatusDot.className = 'status-dot online';
+        serverStatusText.textContent = `${data.players.online}/${data.players.max} Online`;
+      } else {
+        serverStatusDot.className = 'status-dot offline';
+        serverStatusText.textContent = 'Offline';
+      }
+    } catch (err) {
+      serverStatusDot.className = 'status-dot offline';
+      serverStatusText.textContent = 'Error';
+    }
+  };
+
+  // Initial fetch
+  await fetchStatus();
+  
+  // Fetch every 30 seconds
+  serverStatusInterval = setInterval(fetchStatus, 30000);
 }
 
 // Fetch update status from main process
