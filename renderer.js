@@ -1680,12 +1680,16 @@ function switchModpack(packKey) {
   // Fetch local version info
   updateVersionCheck();
   
+  if (versionCheckInterval) clearInterval(versionCheckInterval);
+  versionCheckInterval = setInterval(updateVersionCheck, 2000); // Check every 2 seconds
+  
   // Fetch server status
   checkServerStatus(packKey);
 }
 
 // Global server status interval
 let serverStatusInterval = null;
+let versionCheckInterval = null;
 
 async function checkServerStatus(packKey) {
   const details = packDetails[packKey];

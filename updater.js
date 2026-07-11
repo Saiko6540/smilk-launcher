@@ -119,6 +119,36 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   sendProgress({ status: 'checking', message: 'Checking for updates...' });
 
   let remoteConfig;
+
+  // Auto-resolve github branch URLs to .mrpack files
+  const treeMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/tree\/([^\/]+)/);
+  if (treeMatch) {
+    try {
+      const [_, owner, repo, branch] = treeMatch;
+      const safeBranch = encodeURIComponent(decodeURIComponent(branch));
+      const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${safeBranch}`;
+      
+      const treeRes = await new Promise((resolve, reject) => {
+          https.get(treeUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(JSON.parse(data)));
+          }).on('error', reject);
+      });
+      
+      if (treeRes && treeRes.tree) {
+        const file = treeRes.tree.find(f => f.path.endsWith('.mrpack'));
+        if (file) {
+          configUrl = `https://github.com/${owner}/${repo}/raw/${branch}/${encodeURIComponent(file.path)}`;
+          console.log(`Auto-resolved configUrl to: ${configUrl}`);
+        } else {
+          throw new Error("No .mrpack file found in the branch!");
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to auto-resolve branch URL", err);
+    }
+  }
   if (configUrl.endsWith('.mrpack')) {
     try {
       if (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com')) {
@@ -135,7 +165,9 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         const repoMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)/);
         if (repoMatch) {
           const [_, owner, repo, branch, filepath] = repoMatch;
-          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${filepath}&sha=${branch}&page=1&per_page=1`;
+          const safeBranch = encodeURIComponent(decodeURIComponent(branch));
+          const safePath = encodeURIComponent(decodeURIComponent(filepath));
+          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${safePath}&sha=${safeBranch}&page=1&per_page=1`;
           try {
             const apiText = await new Promise((resolve, reject) => {
               https.get(apiUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
