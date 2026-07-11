@@ -828,12 +828,23 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .range-labels {
-  display: flex;
-  justify-content: space-between;
+  position: relative;
+  height: 15px;
   margin-top: 8px;
   font-size: 10px;
   color: rgba(255, 255, 255, 0.3);
   font-weight: 600;
+}
+.range-labels span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+.range-labels span:first-child {
+  transform: translateX(0); /* Left align first label */
+}
+.range-labels span:last-child {
+  transform: translateX(-100%); /* Right align last label */
 }
 
 /* Toggle Switch Row */

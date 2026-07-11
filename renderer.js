@@ -1793,13 +1793,21 @@ async function loadSettings() {
   // Update the UI labels based on new max
   const rangeLabels = document.querySelector('.range-labels');
   if (rangeLabels) {
-    rangeLabels.innerHTML = `
-      <span>2 GB</span>
-      <span>${Math.floor(maxSafeRam * 0.25)} GB</span>
-      <span>${Math.floor(maxSafeRam * 0.5)} GB</span>
-      <span>${Math.floor(maxSafeRam * 0.75)} GB</span>
-      <span>${maxSafeRam} GB</span>
-    `;
+    const rMin = 2;
+    const rRange = maxSafeRam - rMin;
+    let html = `<span style="left: 0%;">2 GB</span>`;
+    
+    // Generate clean beautiful intermediate steps
+    const steps = [8, 16, 24];
+    for (const step of steps) {
+      if (maxSafeRam > step + 2) {
+        const percent = ((step - rMin) / rRange) * 100;
+        html += `<span style="left: ${percent}%;">${step} GB</span>`;
+      }
+    }
+    
+    html += `<span style="left: 100%;">${maxSafeRam} GB</span>`;
+    rangeLabels.innerHTML = html;
   }
   
   // Cap current selection if it exceeds system capabilities or falls below minimum
