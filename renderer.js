@@ -2212,6 +2212,8 @@ function switchInstance(instanceId) {
   activeInstanceId = instanceId;
   activePack = instanceId; // keep old variable for compat
   
+  stopBackgroundCycle();
+  
   const instance = configSettings.instances.find(i => i.id === instanceId);
   if (!instance) return;
 
@@ -2358,6 +2360,28 @@ async function installNewInstance(packData, mrpackPath, versionType) {
   window.api.startUpdate(instanceId);
 }
 
+let backgroundCycleInterval = null;
+const fallbackThemes = ['theme-stranded', 'theme-democky', 'theme-cobblemon', 'theme-vanilla'];
+
+function startBackgroundCycle() {
+  if (backgroundCycleInterval) return;
+  let themeIndex = 0;
+  // Set initial theme
+  document.body.className = fallbackThemes[themeIndex];
+  
+  backgroundCycleInterval = setInterval(() => {
+    themeIndex = (themeIndex + 1) % fallbackThemes.length;
+    document.body.className = fallbackThemes[themeIndex];
+  }, 5000); // Change every 5 seconds
+}
+
+function stopBackgroundCycle() {
+  if (backgroundCycleInterval) {
+    clearInterval(backgroundCycleInterval);
+    backgroundCycleInterval = null;
+  }
+}
+
 // App Initiation
 async function initApp() {
   initParticles();
@@ -2375,6 +2399,9 @@ async function initApp() {
     document.querySelector('.pack-display').style.display = 'none';
     const actionWidget = document.querySelector('.action-widget');
     if (actionWidget) actionWidget.style.display = 'none';
+    
+    // Start cycling backgrounds when empty
+    startBackgroundCycle();
   }
 }
 
