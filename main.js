@@ -71,7 +71,7 @@ const modpacks = {
     }
   },
   democky_edition: {
-    name: 'Create: Democky edition',
+    name: 'Create plus',
     mcVersion: '1.20.1',
     loader: 'forge-47.2.0',
     configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/createplus/modpack_test_1.0.0.mrpack',
