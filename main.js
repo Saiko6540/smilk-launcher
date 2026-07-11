@@ -640,15 +640,16 @@ ipcMain.handle('get-github-catalog', async () => {
     const fetch = require('node-fetch'); // Electron has fetch natively or we can use https, but Node 20+ has fetch built-in
   } catch (e) {}
 
-  const response = await fetch(`${apiBase}/branches`, { headers });
-  if (!response.ok) throw new Error('Failed to fetch branches');
-  const branches = await response.json();
+  // Fetch all branches (each branch is a modpack version/variant)
+  const branchesRes = await fetch(`${apiBase}/branches?timestamp=${Date.now()}`, { headers });
+  if (!branchesRes.ok) throw new Error('Failed to fetch catalog branches');
+  const branches = await branchesRes.json();
 
   const catalog = [];
   for (const branch of branches) {
     if (branch.name === 'main' || branch.name === 'master') continue; // Ignore main branches
 
-    const treeRes = await fetch(`${apiBase}/git/trees/${branch.name}?recursive=1`, { headers });
+    const treeRes = await fetch(`${apiBase}/git/trees/${branch.commit.sha}?recursive=1`, { headers });
     if (!treeRes.ok) continue;
     const treeData = await treeRes.json();
     const files = treeData.tree || [];
@@ -670,7 +671,7 @@ ipcMain.handle('get-github-catalog', async () => {
         const readmeText = await readmeRes.text();
         const lines = readmeText.split('\n').map(l => l.trim());
         if (lines.length > 0) {
-          title = lines[0].replace(/^#+\s*/, ''); // First line is title
+          title = lines[0].replace(/^(#+\s*|title:\s*)/i, '');
           
           const tagLineIndex = lines.findIndex(l => l.toLowerCase().startsWith('tags:'));
           if (tagLineIndex !== -1) {
@@ -680,6 +681,7 @@ ipcMain.handle('get-github-catalog', async () => {
           // Description is everything after first 2-3 lines
           const descStart = tagLineIndex !== -1 ? tagLineIndex + 1 : 1;
           description = lines.slice(descStart).join('\n').trim();
+          description = description.replace(/^description:\s*/i, '');
         }
       }
     }

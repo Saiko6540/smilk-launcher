@@ -2215,6 +2215,10 @@ function switchInstance(instanceId) {
   const instance = configSettings.instances.find(i => i.id === instanceId);
   if (!instance) return;
 
+  document.querySelector('.pack-display').style.display = 'block';
+  const actionWidget = document.querySelector('.action-widget');
+  if (actionWidget) actionWidget.style.display = 'flex';
+
   // Refresh active class in list
   document.querySelectorAll('.modpack-item').forEach(item => {
     item.classList.toggle('active', item.dataset.id === instanceId);
@@ -2367,6 +2371,10 @@ async function initApp() {
   
   if (configSettings.instances.length > 0) {
     switchInstance(configSettings.instances[0].id);
+  } else {
+    document.querySelector('.pack-display').style.display = 'none';
+    const actionWidget = document.querySelector('.action-widget');
+    if (actionWidget) actionWidget.style.display = 'none';
   }
 }
 
