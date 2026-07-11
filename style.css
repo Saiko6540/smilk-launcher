@@ -54,7 +54,8 @@ body.theme-vanilla {
 }
 
 body {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
   background: #000;
   color: #fff;
   overflow: hidden;
@@ -150,11 +151,11 @@ body.fade-out {
 }
 
 .brand-main {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 20px;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 12px;
   font-weight: 900;
-  letter-spacing: 2px;
-  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0.6));
+  letter-spacing: 1px;
+  background: linear-gradient(90deg, #fff, rgba(255, 255, 255, 0.8));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -173,12 +174,12 @@ body.fade-out {
   display: flex;
   align-items: center;
   gap: 15px;
-  padding: 15px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 12px 15px;
+  border-radius: 0px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 2px solid rgba(255, 255, 255, 0.1);
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: all 0.2s ease;
 }
 
 .modpack-item:hover {
@@ -198,7 +199,8 @@ body.fade-out {
   background: rgba(255, 255, 255, 0.03);
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: 0px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -299,10 +301,10 @@ body.fade-out {
 }
 
 .pack-badge {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 11px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   color: var(--primary);
   text-shadow: 0 0 10px rgba(var(--primary-rgb), 0.3);
   margin-bottom: 12px;
@@ -391,15 +393,15 @@ body.fade-out {
 
 /* --- Control Bar Bottom --- */
 .control-bar {
-  background: rgba(10, 10, 15, 0.4);
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(25px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 20px 30px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  border-radius: 0px;
+  padding: 15px 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   animation: fadeInUp 1s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
 }
 
@@ -476,30 +478,32 @@ body.fade-out {
 .play-button {
   width: 100%;
   height: 56px;
-  border-radius: 12px;
-  background: linear-gradient(90deg, var(--primary) 0%, rgba(var(--primary-rgb), 0.8) 100%);
-  border: none;
-  outline: none;
-  color: #fff;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: 3px;
+  border-radius: 0px;
+  background: #5c5c5c;
+  border: 2px solid #000;
+  box-shadow: inset -3px -3px 0px #3c3c3c, inset 3px 3px 0px #8c8c8c;
+  color: #e0e0e0;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 1px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  box-shadow: var(--glow);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: all 0.1s ease;
 }
 
 .play-button:hover {
-  transform: translateY(-2px);
-  filter: brightness(1.1);
-  box-shadow: 0 0 30px rgba(var(--primary-rgb), 0.6);
+  background: #7c7c7c;
+  color: #ffffa0;
+  box-shadow: inset -3px -3px 0px #4c4c4c, inset 3px 3px 0px #acacac;
+  transform: none;
+  filter: none;
 }
 
 .play-button:active {
-  transform: translateY(1px);
+  box-shadow: inset 3px 3px 0px #3c3c3c, inset -3px -3px 0px #8c8c8c;
+  background: #4c4c4c;
 }
 
 .play-button span {
@@ -565,8 +569,9 @@ body.fade-out {
 
 #progress-percentage {
   color: var(--primary);
-  font-family: 'Orbitron', sans-serif;
+  font-family: 'VT323', monospace;
   font-weight: 700;
+  font-size: 16px;
 }
 
 .hidden {
@@ -662,8 +667,8 @@ body.fade-out {
 }
 
 .modal-header h2 {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 20px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1px;
 }
@@ -782,8 +787,8 @@ body.fade-out {
 #ram-value {
   color: var(--primary);
   font-weight: 700;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px;
+  font-family: 'VT323', monospace;
+  font-size: 18px;
 }
 
 .range-container {
@@ -1000,8 +1005,8 @@ input:checked + .slider-switch:before {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 12px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 1px;
 }
