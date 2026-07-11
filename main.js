@@ -13,7 +13,7 @@ const startTimestamp = new Date();
 
 function initDiscordRPC() {
   if (!clientId || clientId === '') return;
-  
+
   DiscordRPC.register(clientId);
   rpc = new DiscordRPC.Client({ transport: 'ipc' });
 
@@ -127,7 +127,7 @@ function createWindow() {
 
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
-  
+
   mainWindow.on('closed', () => {
     mainWindow = null;
     // Close console window when main window closes
@@ -238,7 +238,7 @@ ipcMain.handle('load-settings', () => {
   const os = require('os');
   const totalMemGb = Math.floor(os.totalmem() / (1024 * 1024 * 1024));
   let loadedSettings = { ...defaultSettings };
-  
+
   if (fs.existsSync(settingsPath)) {
     try {
       const data = fs.readFileSync(settingsPath, 'utf8');
@@ -249,7 +249,7 @@ ipcMain.handle('load-settings', () => {
       console.error('Error loading settings, returning defaults:', e);
     }
   }
-  
+
   return { settings: loadedSettings, systemMemoryGb: totalMemGb };
 });
 
@@ -359,7 +359,7 @@ ipcMain.handle('check-updates', async (event, packKey) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
   const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
   const localVersionFile = path.join(instanceDir, 'local_version.json');
-  
+
   const pack = modpacks[packKey];
   if (!pack) throw new Error('Unknown modpack');
 
@@ -372,7 +372,7 @@ ipcMain.handle('check-updates', async (event, packKey) => {
       localVersion = localConfig.version;
       commitMessage = localConfig.commitMessage;
       mcVersion = localConfig.minecraft;
-    } catch (e) {}
+    } catch (e) { }
   }
 
   return {
@@ -389,7 +389,7 @@ ipcMain.handle('start-update', async (event, packKey) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
   const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
   const pack = modpacks[packKey];
-  
+
   if (!pack) throw new Error('Unknown modpack');
 
   const sendProgress = (data) => {
@@ -413,21 +413,21 @@ ipcMain.handle('start-launch', async (event, packKey) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
   const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
   const pack = modpacks[packKey];
-  
+
   if (!pack) throw new Error('Unknown modpack');
 
   const sendProgress = (data) => {
     if (mainWindow) {
       mainWindow.webContents.send('launch-status', data);
     }
-    
+
     // Discord RPC Update
     if (data.status === 'game_started') {
       setDiscordActivity({
         details: `Playing: ${pack.name}`,
         state: `Nickname: ${settings.nickname}`
       });
-    } else if (data.status === 'game_exited' || data.status === 'error') {
+    } else if (data.status === 'game_exited' || data.status === 'game_crashed' || data.status === 'error') {
       setDiscordActivity({
         details: 'In Menu',
         state: 'Choosing modpack'
@@ -447,7 +447,7 @@ ipcMain.handle('start-launch', async (event, packKey) => {
             level = 'warn';
           }
         }
-        
+
         consoleWindow.webContents.send('console-log', {
           message: data.message,
           level: level
@@ -463,7 +463,7 @@ ipcMain.handle('start-launch', async (event, packKey) => {
       throw new Error('Modpack must be installed before launching.');
     }
     const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
-    
+
     await launchMinecraft(
       instanceDir,
       settings.nickname,
@@ -488,7 +488,7 @@ ipcMain.handle('start-launch', async (event, packKey) => {
 // Install Java IPC
 ipcMain.handle('install-java', async (event, requiredVersion) => {
   const AdmZip = require('adm-zip');
-  
+
   const javaDir = path.join(userDataPath, 'game_data', 'java', `jre_${requiredVersion}`);
   if (fs.existsSync(javaDir)) {
     fs.rmSync(javaDir, { recursive: true, force: true });
@@ -558,7 +558,7 @@ ipcMain.on('open-console-window', () => {
     consoleWindow.focus();
     return;
   }
-  
+
   consoleWindow = new BrowserWindow({
     width: 800,
     height: 600,
@@ -570,9 +570,9 @@ ipcMain.on('open-console-window', () => {
     },
     autoHideMenuBar: true
   });
-  
+
   consoleWindow.loadFile('console.html');
-  
+
   consoleWindow.on('closed', () => {
     consoleWindow = null;
   });
@@ -610,4 +610,57 @@ ipcMain.on('launcher-hide', () => {
 
 ipcMain.on('launcher-show', () => {
   if (mainWindow) mainWindow.show();
+});
+
+// Upload Log IPC
+ipcMain.handle('upload-log', async (event, instanceDir) => {
+  const logFile = path.join(instanceDir, 'logs', 'latest.log');
+  if (!fs.existsSync(logFile)) {
+    throw new Error('Log file not found');
+  }
+
+  const logContent = fs.readFileSync(logFile, 'utf8');
+  const postData = new URLSearchParams({
+    'content': logContent
+  }).toString();
+
+  const options = {
+    hostname: 'api.mclo.gs',
+    port: 443,
+    path: '/1/log',
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': Buffer.byteLength(postData)
+    }
+  };
+
+  return new Promise((resolve, reject) => {
+    const req = require('https').request(options, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(body);
+          if (json.success) {
+            resolve({ success: true, url: json.url });
+          } else {
+            reject(new Error('Failed to upload log: ' + (json.error || 'Unknown error')));
+          }
+        } catch (e) {
+          reject(new Error('Invalid response from mclo.gs'));
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      reject(new Error(`Network error: ${e.message}`));
+    });
+
+    req.write(postData);
+    req.end();
+  });
 });

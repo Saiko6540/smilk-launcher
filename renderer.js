@@ -2090,6 +2090,66 @@ window.api.onLaunchStatus((data) => {
     
   } else if (data.status === 'game_running') {
     // logs go to debug console window now
+  } else if (data.status === 'game_crashed') {
+    launcherState = 'ready';
+    playBtn.disabled = false;
+    updateVersionCheck();
+    
+    clearTimeout(hideTimeout);
+    window.api.launcherShow();
+    setTimeout(() => {
+      document.body.classList.remove('fade-out');
+      window.api.restoreWindow();
+    }, 100);
+
+    // Setup Crash Modal
+    const crashModal = document.getElementById('crash-error-modal');
+    document.getElementById('crash-error-title').textContent = `Minecraft crashed (Exit Code: ${data.code})`;
+    
+    const uploadBtn = document.getElementById('crash-upload-btn');
+    const openLogsBtn = document.getElementById('crash-open-btn');
+    const closeBtn = document.getElementById('crash-modal-close');
+    const resultDiv = document.getElementById('crash-upload-result');
+    const urlInput = document.getElementById('crash-url-input');
+    const copyBtn = document.getElementById('crash-copy-btn');
+    
+    // Reset state
+    resultDiv.classList.add('hidden');
+    uploadBtn.textContent = 'Upload Log to Web';
+    uploadBtn.disabled = false;
+
+    closeBtn.onclick = () => crashModal.classList.add('hidden');
+    
+    openLogsBtn.onclick = () => {
+      window.api.openInstancesDir(); // We'll just open the instances dir for now, or we can add a specific open path
+    };
+
+    uploadBtn.onclick = async () => {
+      uploadBtn.textContent = 'Uploading...';
+      uploadBtn.disabled = true;
+      try {
+        const res = await window.api.uploadLog(data.instanceDir);
+        if (res.success) {
+          resultDiv.classList.remove('hidden');
+          urlInput.value = res.url;
+          uploadBtn.textContent = 'Uploaded!';
+          uploadBtn.style.background = '#27ae60'; // Green
+        }
+      } catch (err) {
+        alert('Failed to upload log: ' + err.message);
+        uploadBtn.textContent = 'Upload Log to Web';
+        uploadBtn.disabled = false;
+      }
+    };
+
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(urlInput.value);
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+    };
+
+    crashModal.classList.remove('hidden');
+    
   } else if (data.status === 'game_exited') {
     // reset launcher state
     launcherState = 'ready';

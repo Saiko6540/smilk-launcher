@@ -335,7 +335,11 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     
     proc.on('close', (code) => {
       console.log(`Minecraft exited with code ${code}`);
-      sendProgress({ status: 'game_exited', message: `Minecraft exited with code ${code}` });
+      if (code !== 0) {
+        sendProgress({ status: 'game_crashed', code: code, instanceDir: instanceDir, message: `Minecraft crashed with code ${code}` });
+      } else {
+        sendProgress({ status: 'game_exited', message: `Minecraft exited gracefully (code ${code})` });
+      }
     });
   } catch (err) {
     console.error('Launch failed:', err);

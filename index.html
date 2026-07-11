@@ -275,6 +275,37 @@
     </div>
   </div>
 
+  <!-- Crash Error Modal -->
+  <div class="modal-overlay hidden" id="crash-error-modal">
+    <div class="settings-card java-error-card">
+      <div class="modal-header">
+        <h2 style="color: #ff4757;">Game Crashed!</h2>
+        <button class="close-btn" id="crash-modal-close">&times;</button>
+      </div>
+      
+      <div class="modal-body" style="text-align: center; padding: 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">💥</div>
+        <h3 id="crash-error-title" style="margin-bottom: 1rem;">Minecraft has crashed</h3>
+        <p id="crash-error-desc" style="color: rgba(255, 255, 255, 0.7); margin-bottom: 1.5rem;">
+          The game exited unexpectedly. You can view the crash logs locally or upload them to mclo.gs for sharing.
+        </p>
+        
+        <div id="crash-upload-result" class="hidden" style="margin-top: 1rem; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;">
+          <p style="margin-bottom: 5px; color: #a4b0be;">Log uploaded successfully:</p>
+          <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+            <input type="text" id="crash-url-input" readonly style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 10px; border-radius: 4px; width: 250px;">
+            <button id="crash-copy-btn" class="secondary-btn" style="padding: 5px 10px; font-size: 0.9rem;">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: center; gap: 1rem;" id="crash-modal-footer">
+        <button id="crash-open-btn" class="secondary-btn">Open Logs Folder</button>
+        <button id="crash-upload-btn" class="save-btn" style="background: linear-gradient(135deg, #ffa502 0%, #ff7f50 100%); border: none;">Upload Log to Web</button>
+      </div>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>
