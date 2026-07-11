@@ -32,8 +32,6 @@ function setDiscordActivity(data) {
       details: data.details,
       state: data.state,
       startTimestamp,
-      largeImageKey: 'icon', // Requires 'icon' asset uploaded to Discord portal
-      largeImageText: 'smilk launcher',
       instance: false,
     });
   } catch (e) {}
@@ -203,8 +201,6 @@ app.whenReady().then(() => {
   initDiscordRPC();
 
   // Check for auto-updates (silently in background)
-  autoUpdater.logger = console;
-  autoUpdater.logger.transports.file.level = 'info';
   autoUpdater.checkForUpdatesAndNotify();
 
   autoUpdater.on('update-downloaded', () => {
