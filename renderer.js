@@ -1,35 +1,4 @@
-// Modpacks Details Mapping
-const packDetails = {
-  stranded_at_sea: {
-    title: 'Create: Stranded at sea',
-    description: 'An epic oceanic survival adventure built around the Create mod. Automate massive machinery and systems in the middle of a vast waterworld.',
-    mcVersion: '1.20.1',
-    loader: 'Fabric-0.15.11',
-    serverIp: '185.206.149.27:25601'
-  },
-  democky_edition: {
-    title: 'Create +',
-    description: 'Steampunk machinery combined with extreme survival on land. Build complex clockwork railways, steam factories, and automate everything.',
-    mcVersion: '1.20.1',
-    loader: 'Forge-47.2.0',
-    serverIp: '185.206.149.27:25601'
-  },
-  cobblemon: {
-    title: 'Cobblemon',
-    description: 'Catch them all in Minecraft! A fully integrated Pokemon experience, with high quality animations, custom battles, and modern style.',
-    mcVersion: '1.20.1',
-    loader: 'Fabric-0.15.11',
-    serverIp: '185.206.149.27:25601'
-  },
-  vanilla_plus: {
-    title: 'Vanilla+',
-    description: 'A true adventure awaits. Explore dangerous new dungeons, battle fearsome mobs, and discover ancient loot — all in the classic Minecraft spirit.',
-    mcVersion: '1.21.1',
-    loader: 'Fabric-0.16.5',
-    serverIp: '185.206.149.27:25601'
-  }
-};
-
+// Removed packDetails, dynamic fetching implemented
 // UI Elements
 const winMinimizeBtn = document.getElementById('win-minimize');
 const winMaximizeBtn = document.getElementById('win-maximize');
@@ -53,14 +22,20 @@ const modeBadge = document.getElementById('mode-badge');
 const serverStatusDot = document.getElementById('server-status-dot');
 const serverStatusText = document.getElementById('server-status-text');
 
-const usernameInput = document.getElementById('username-input');
-const avatarPreview = document.getElementById('avatar-preview');
+const topNicknameInput = document.getElementById('top-nickname-input');
+const topUserHead = document.getElementById('top-user-head');
+
+// Store Modal Elements
+const newInstanceBtn = document.getElementById('new-instance-btn');
+const storeModal = document.getElementById('store-modal');
+const storeModalClose = document.getElementById('store-modal-close');
+const storeGrid = document.getElementById('store-grid');
+const instancesList = document.getElementById('instances-list');
 
 // Settings Modal Elements
 const settingsBtn = document.getElementById('settings-btn');
 const settingsModal = document.getElementById('settings-modal');
 const modalClose = document.getElementById('modal-close');
-const settingsNickname = document.getElementById('settings-nickname');
 const settingsRam = document.getElementById('settings-ram');
 const ramValueLabel = document.getElementById('ram-value');
 const settingsJava = document.getElementById('settings-java');
@@ -1649,51 +1624,8 @@ function drawVanillaScene() {
   fallingLeaves.forEach(l => { l.update(); l.draw(); });
 }
 
-// Change Modpack Theme & View
-function switchModpack(packKey) {
-  if (launcherState !== 'ready') return; // block switching while installing/running
-  
-  activePack = packKey;
-  const oldTheme = activeTheme;
-  
-  if (packKey === 'stranded_at_sea') activeTheme = 'theme-stranded';
-  else if (packKey === 'democky_edition') activeTheme = 'theme-democky';
-  else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
-  else if (packKey === 'vanilla_plus') activeTheme = 'theme-vanilla';
-  
-  // CSS Transition
-  document.body.classList.remove(oldTheme);
-  document.body.classList.add(activeTheme);
-
-  // Update DOM details
-  const details = packDetails[packKey];
-  packTitleEl.textContent = details.title;
-  packDescEl.textContent = details.description;
-  statMcVerEl.textContent = details.mcVersion;
-  statLoaderEl.textContent = details.loader;
-
-  // Highlight list
-  document.querySelectorAll('.modpack-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.pack === packKey);
-  });
-
-  // Fetch local version info
-  updateVersionCheck();
-  
-  if (versionCheckInterval) clearInterval(versionCheckInterval);
-  versionCheckInterval = setInterval(updateVersionCheck, 2000); // Check every 2 seconds
-  
-  // Fetch server status
-  checkServerStatus(packKey);
-}
-
-// Global server status interval
-let serverStatusInterval = null;
-let versionCheckInterval = null;
-
-async function checkServerStatus(packKey) {
-  const details = packDetails[packKey];
-  if (!details || !details.serverIp) return;
+async function checkServerStatus(instanceId) {
+  const serverIp = '185.206.149.27:25601';
 
   // Clear previous interval if any
   if (serverStatusInterval) clearInterval(serverStatusInterval);
@@ -1703,44 +1635,50 @@ async function checkServerStatus(packKey) {
       serverStatusDot.className = 'status-dot';
       serverStatusText.textContent = 'Pinging...';
       
-      const response = await fetch(`https://api.mcstatus.io/v2/status/java/${details.serverIp}`);
+      const response = await fetch(`https://api.mcstatus.io/v2/status/java/${serverIp}`);
       const data = await response.json();
       
       if (data.online) {
-        // MOTD Synchronization
         const motd = data.motd?.clean?.trim() || "";
-        const motdPackMapping = {
-          '0': 'vanilla_plus',
-          '1': 'stranded_at_sea',
-          '2': 'democky_edition',
-          '3': 'cobblemon'
+        const motdMap = {
+          '0': ['vanilla', 'adventure'],
+          '1': ['sea', 'stranded'],
+          '2': ['create', 'plus', 'democky'],
+          '3': ['cobblemon', 'pokemon']
         };
         
-        // Find if motd starts with or contains our target numbers
-        let serverPack = null;
-        for (const [key, packName] of Object.entries(motdPackMapping)) {
-          // Strict check: MOTD is exactly the digit, or starts with the digit and a space/separator
-          if (motd === key || motd.startsWith(`${key} `) || motd.startsWith(`[${key}]`)) {
-            serverPack = packName;
+        let serverDigit = null;
+        for (const [digit, keywords] of Object.entries(motdMap)) {
+          if (motd === digit || motd.startsWith(`${digit} `) || motd.startsWith(`[${digit}]`)) {
+            serverDigit = digit;
             break;
           }
         }
 
-        // Highlight the server's active pack in the sidebar
+        let serverActiveInstance = null;
+        if (serverDigit !== null && configSettings.instances) {
+          const keywords = motdMap[serverDigit];
+          serverActiveInstance = configSettings.instances.find(inst => {
+            const nameLower = inst.name.toLowerCase();
+            const branchLower = inst.branch.toLowerCase();
+            return keywords.some(kw => nameLower.includes(kw) || branchLower.includes(kw));
+          });
+        }
+
+        // Highlight server-active sidebar item
         document.querySelectorAll('.modpack-item').forEach(item => {
           item.classList.remove('server-active');
         });
-        if (serverPack) {
-          const activeItem = document.querySelector(`.modpack-item[data-pack="${serverPack}"]`);
+        if (serverActiveInstance) {
+          const activeItem = document.querySelector(`.modpack-item[data-id="${serverActiveInstance.id}"]`);
           if (activeItem) activeItem.classList.add('server-active');
         }
 
-        // Sort the list based on server pack and last played time
-        sortModpacks(serverPack);
+        const serverActiveName = serverActiveInstance ? serverActiveInstance.name : 'Another Pack';
 
-        if (serverPack && serverPack !== packKey) {
-          serverStatusDot.className = 'status-dot offline'; // Using offline (red) dot to indicate mismatch
-          serverStatusText.textContent = `Server is on ${packDetails[serverPack].title}`;
+        if (serverActiveInstance && serverActiveInstance.id !== instanceId) {
+          serverStatusDot.className = 'status-dot offline';
+          serverStatusText.textContent = `Server is on ${serverActiveName}`;
           serverStatusText.title = '';
           serverStatusText.style.cursor = 'default';
         } else {
@@ -1748,9 +1686,6 @@ async function checkServerStatus(packKey) {
           serverStatusText.textContent = `${data.players.online}/${data.players.max} Online`;
           if (data.players.list && data.players.list.length > 0) {
             serverStatusText.title = 'Players online:\n' + data.players.list.map(p => p.name_clean).join('\n');
-            serverStatusText.style.cursor = 'help';
-          } else if (data.players.online > 0) {
-            serverStatusText.title = 'Players are hidden by the server';
             serverStatusText.style.cursor = 'help';
           } else {
             serverStatusText.title = 'No players online';
@@ -1771,10 +1706,7 @@ async function checkServerStatus(packKey) {
     }
   };
 
-  // Initial fetch
   await fetchStatus();
-  
-  // Fetch every 30 seconds
   serverStatusInterval = setInterval(fetchStatus, 30000);
 }
 
@@ -1836,8 +1768,7 @@ async function loadSettings() {
   if (settings.ramGb < 2) settings.ramGb = 2;
   
   // Sync fields
-  usernameInput.value = settings.nickname;
-  settingsNickname.value = settings.nickname;
+  topNicknameInput.value = settings.nickname;
   settingsRam.value = settings.ramGb;
   ramValueLabel.textContent = `${settings.ramGb} GB`;
   settingsJava.value = settings.javaPath || '';
@@ -1846,38 +1777,35 @@ async function loadSettings() {
 
   updateUserAvatar(settings.nickname);
   updateModeBadge(settings.mockMode);
+
+  return settings;
 }
 
+// Settings Saving
 async function saveSettingsData() {
   const settings = {
-    nickname: settingsNickname.value.trim() || 'Player',
+    nickname: configSettings.nickname || 'Player',
     ramGb: parseInt(settingsRam.value, 10),
     javaPath: settingsJava.value.trim(),
     jvmArgs: settingsArgs.value.trim(),
-    selectedPack: activePack,
-    mockMode: settingsMock.checked
+    mockMode: settingsMock.checked,
+    instances: configSettings.instances || []
   };
 
   const res = await window.api.saveSettings(settings);
-  if (res.success) {
+  if (res && res.success) {
     configSettings = settings;
-    // sync visual inputs
-    usernameInput.value = settings.nickname;
+    topNicknameInput.value = settings.nickname;
     updateUserAvatar(settings.nickname);
     updateModeBadge(settings.mockMode);
-    
-    // Close modal
-    settingsModal.classList.add('hidden');
-    
-    // Re-verify update checker
-    updateVersionCheck();
   } else {
-    alert(`Failed to save settings: ${res.error}`);
+    alert(`Failed to save settings: ${res ? res.error : 'Unknown error'}`);
   }
 }
 
 function updateUserAvatar(name) {
-  avatarPreview.textContent = (name && name[0]) ? name[0].toUpperCase() : 'P';
+  const headUrl = `https://minotar.net/helm/${name || 'Player'}/32.png`;
+  if (topUserHead) topUserHead.src = headUrl;
 }
 
 function updateModeBadge(isMock) {
@@ -1895,7 +1823,6 @@ function updateModeBadge(isMock) {
 // Settings Modal Open/Close listeners
 settingsBtn.addEventListener('click', () => {
   // Sync setting dialog inputs
-  settingsNickname.value = usernameInput.value;
   settingsModal.classList.remove('hidden');
 });
 
@@ -1906,16 +1833,16 @@ settingsModal.addEventListener('click', (e) => {
 
 // Inline Username updates settings instantly on blur/enter
 function updateInlineUsername() {
-  const val = usernameInput.value.trim();
+  const val = topNicknameInput.value.trim();
   if (val && val !== configSettings.nickname) {
-    settingsNickname.value = val;
+    configSettings.nickname = val;
     saveSettingsData();
   }
 }
-usernameInput.addEventListener('blur', updateInlineUsername);
-usernameInput.addEventListener('keypress', (e) => {
+topNicknameInput.addEventListener('blur', updateInlineUsername);
+topNicknameInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
-    usernameInput.blur();
+    topNicknameInput.blur();
   }
 });
 
@@ -1932,7 +1859,13 @@ browseJavaBtn.addEventListener('click', async () => {
   }
 });
 
-settingsSaveBtn.addEventListener('click', saveSettingsData);
+settingsSaveBtn.addEventListener('click', async () => {
+  settingsSaveBtn.textContent = 'Saving...';
+  await saveSettingsData();
+  settingsModal.classList.add('hidden');
+  settingsSaveBtn.textContent = 'Apply Settings';
+  updateVersionCheck();
+});
 
 settingsResetBtn.addEventListener('click', async () => {
   if (confirm('Are you sure you want to reset all launcher settings to default?')) {
@@ -1967,7 +1900,14 @@ settingsClearBtn.addEventListener('click', async () => {
   }
 });
 
-// Website & Debug button handlers
+// Website, Discord & Debug button handlers
+const discordBtn = document.getElementById('discord-btn');
+if (discordBtn) {
+  discordBtn.addEventListener('click', () => {
+    window.api.openDiscord();
+  });
+}
+
 websiteBtn.addEventListener('click', () => {
   window.api.openWebsite();
 });
@@ -1988,7 +1928,7 @@ playBtn.addEventListener('click', async () => {
 
   // Update last played timestamp and re-sort
   localStorage.setItem('lastPlayed_' + activePack, Date.now());
-  sortModpacks();
+  renderInstancesList();
 
   // Go to updating process
   launcherState = 'updating';
@@ -2228,55 +2168,200 @@ window.api.onLaunchStatus((data) => {
   }
 });
 
+// --- UI Overhaul: Dynamic Instances & Store ---
+
+let activeInstanceId = null;
+
+// Render the left sidebar instances list
+function renderInstancesList() {
+  instancesList.innerHTML = '';
+  if (!configSettings.instances || configSettings.instances.length === 0) {
+    instancesList.innerHTML = '<div style="padding: 20px; color: rgba(255,255,255,0.5); font-size: 0.9rem; text-align: center;">No packs installed. Click + to add one.</div>';
+    return;
+  }
+
+  // Sort instances (Priority: Server MOTD matching, then last played)
+  const sorted = [...configSettings.instances].sort((a, b) => {
+    // We could add MOTD sorting logic here later
+    const timeA = parseInt(localStorage.getItem('lastPlayed_' + a.id) || '0', 10);
+    const timeB = parseInt(localStorage.getItem('lastPlayed_' + b.id) || '0', 10);
+    return timeB - timeA;
+  });
+
+  sorted.forEach(instance => {
+    const el = document.createElement('div');
+    el.className = `modpack-item ${activeInstanceId === instance.id ? 'active' : ''}`;
+    el.dataset.id = instance.id;
+    
+    el.innerHTML = `
+      <div class="modpack-icon">📦</div>
+      <div class="modpack-info">
+        <span class="modpack-name">${instance.name}</span>
+        <span class="modpack-meta">${instance.versionType || 'Default'}</span>
+      </div>
+    `;
+    
+    el.addEventListener('click', () => switchInstance(instance.id));
+    instancesList.appendChild(el);
+  });
+}
+
+// Switch the active instance in the dashboard
+function switchInstance(instanceId) {
+  if (launcherState !== 'ready') return;
+  activeInstanceId = instanceId;
+  activePack = instanceId; // keep old variable for compat
+  
+  const instance = configSettings.instances.find(i => i.id === instanceId);
+  if (!instance) return;
+
+  // Refresh active class in list
+  document.querySelectorAll('.modpack-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.id === instanceId);
+  });
+
+  // Update DOM details
+  packTitleEl.textContent = instance.name;
+  packDescEl.textContent = instance.description || 'A custom Minecraft modpack.';
+  statMcVerEl.textContent = instance.mcVersion || 'Unknown';
+  statLoaderEl.textContent = instance.loader || 'Unknown';
+
+  // Dynamic Background
+  if (instance.backgroundUrl) {
+    document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.6), rgba(10, 10, 12, 0.8)), url('${instance.backgroundUrl}')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+  } else {
+    document.body.style.backgroundImage = 'none';
+  }
+
+  updateVersionCheck();
+  checkServerStatus(instanceId);
+  
+  if (versionCheckInterval) clearInterval(versionCheckInterval);
+  versionCheckInterval = setInterval(updateVersionCheck, 2000);
+}
+
+// Global server status interval
+let serverStatusInterval = null;
+let versionCheckInterval = null;
+
+// Store Modal Logic
+newInstanceBtn.addEventListener('click', async () => {
+  storeModal.classList.remove('hidden');
+  storeGrid.innerHTML = '<div class="store-loading">Loading from GitHub...</div>';
+  
+  try {
+    const catalog = await window.api.getGithubCatalog();
+    storeGrid.innerHTML = '';
+    
+    if (catalog.length === 0) {
+      storeGrid.innerHTML = '<div class="store-loading">No modpacks found in the repository.</div>';
+      return;
+    }
+
+    catalog.forEach(pack => {
+      const el = document.createElement('div');
+      el.className = 'store-item';
+      
+      const tagsHtml = pack.tags.map(t => {
+        if (t.toLowerCase() === 'currently on server') return `<span class="store-tag server">● On Server</span>`;
+        return `<span class="store-tag">${t}</span>`;
+      }).join('');
+
+      let versionOptionsHtml = '';
+      if (pack.mrpacks.length > 0) {
+        versionOptionsHtml = `<select class="store-version-select">`;
+        pack.mrpacks.forEach(mr => {
+          const name = mr.split('/').pop().replace('.mrpack', '');
+          versionOptionsHtml += `<option value="${mr}">${name}</option>`;
+        });
+        versionOptionsHtml += `</select>`;
+      } else {
+        versionOptionsHtml = `<span style="font-size:0.8rem; color:red;">No .mrpack found</span>`;
+      }
+
+      el.innerHTML = `
+        <div class="store-item-banner" style="background-image: url('${pack.bannerUrl}')"></div>
+        <div class="store-item-content">
+          <div class="store-item-title">${pack.title}</div>
+          <div class="store-item-tags">${tagsHtml}</div>
+          <div class="store-item-desc">${pack.description}</div>
+          <div class="store-item-footer">
+            ${versionOptionsHtml}
+            <button class="store-install-btn" ${pack.mrpacks.length === 0 ? 'disabled' : ''}>Install</button>
+          </div>
+        </div>
+      `;
+      
+      const installBtn = el.querySelector('.store-install-btn');
+      if (installBtn) {
+        installBtn.addEventListener('click', () => {
+          const select = el.querySelector('.store-version-select');
+          const mrpackUrl = select ? select.value : pack.mrpacks[0];
+          const versionType = select ? select.options[select.selectedIndex].text : 'Default';
+          installNewInstance(pack, mrpackUrl, versionType);
+        });
+      }
+
+      storeGrid.appendChild(el);
+    });
+
+  } catch (err) {
+    storeGrid.innerHTML = `<div class="store-loading" style="color:red;">Error loading store: ${err.message}</div>`;
+  }
+});
+
+storeModalClose.addEventListener('click', () => {
+  storeModal.classList.add('hidden');
+});
+
+async function installNewInstance(packData, mrpackPath, versionType) {
+  storeModal.classList.add('hidden');
+  
+  const instanceId = packData.branch + '_' + Date.now();
+  
+  if (!configSettings.instances) configSettings.instances = [];
+  configSettings.instances.push({
+    id: instanceId,
+    name: packData.title,
+    branch: packData.branch,
+    mrpackPath: mrpackPath,
+    versionType: versionType,
+    description: packData.description,
+    backgroundUrl: packData.backgroundUrl,
+    mcVersion: 'Downloading...',
+    loader: 'Downloading...'
+  });
+  
+  saveSettingsData();
+  renderInstancesList();
+  switchInstance(instanceId);
+  
+  // Since we don't have the real local config yet, trigger an immediate update
+  // The updater logic in main.js will download the mrpack and extract it.
+  
+  launcherState = 'updating';
+  playBtn.disabled = true;
+  progressContainer.classList.remove('hidden');
+  window.api.startUpdate(instanceId);
+}
+
 // App Initiation
 async function initApp() {
   initParticles();
   animate();
   
-  // Load local client settings configuration
   await loadSettings();
-
-  // Sort modpacks based on last played initially
-  sortModpacks();
-
-  // Switch to default modpack (Stranded)
-  switchModpack('stranded_at_sea');
-}
-
-// Sort modpacks in the UI
-function sortModpacks(activeServerPack = null) {
-  const listContainer = document.querySelector('.modpack-list');
-  if (!listContainer) return;
-  const items = Array.from(listContainer.querySelectorAll('.modpack-item'));
   
-  items.sort((a, b) => {
-    const packA = a.dataset.pack;
-    const packB = b.dataset.pack;
-    
-    // Priority 1: Currently running on server
-    if (activeServerPack) {
-      if (packA === activeServerPack) return -1;
-      if (packB === activeServerPack) return 1;
-    }
-    
-    // Priority 2: Recently launched
-    const timeA = parseInt(localStorage.getItem('lastPlayed_' + packA) || '0', 10);
-    const timeB = parseInt(localStorage.getItem('lastPlayed_' + packB) || '0', 10);
-    
-    // Sort descending (most recent first)
-    return timeB - timeA;
-  });
+  if (!configSettings.instances) configSettings.instances = [];
   
-  // Re-append to container in new order
-  items.forEach(item => listContainer.appendChild(item));
+  renderInstancesList();
+  
+  if (configSettings.instances.length > 0) {
+    switchInstance(configSettings.instances[0].id);
+  }
 }
-
-// Modpack Click List Handlers
-document.querySelectorAll('.modpack-item').forEach(item => {
-  item.addEventListener('click', () => {
-    switchModpack(item.dataset.pack);
-  });
-});
 
 // Window Control Listeners
 winMinimizeBtn.addEventListener('click', () => window.api.minimizeWindow());
@@ -2285,4 +2370,3 @@ winCloseBtn.addEventListener('click', () => window.api.closeWindow());
 
 // Run Init
 initApp();
-

@@ -253,18 +253,15 @@ body.fade-out {
 }
 
 .footer-btn {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 10px;
-  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.05);
   color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
-  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -1147,5 +1144,213 @@ input:checked + .slider-switch:before {
 .title-bar-controls .close-btn-title:hover {
   background: #ff1744 !important;
   color: #fff !important;
+}
+
+/* --- UI Overhaul Additions --- */
+.new-instance-btn {
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+  padding: 15px;
+  margin: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.new-instance-btn:hover {
+  border-color: #fff;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.plus-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.top-bar-user {
+  position: absolute;
+  top: 40px;
+  right: 20px;
+  z-index: 10;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.top-bar-user:hover {
+  opacity: 1;
+}
+
+.user-pill {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 5px 15px;
+  border-radius: 20px;
+  gap: 10px;
+}
+
+.nickname-input-top {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.9rem;
+  width: 100px;
+  text-align: right;
+  outline: none;
+}
+
+#top-user-head {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  image-rendering: pixelated;
+}
+
+/* Store Modal */
+.store-card {
+  background: #0f1115;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  width: 900px;
+  max-width: 90vw;
+  height: 700px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.store-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.store-loading {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 50px;
+  grid-column: 1 / -1;
+}
+
+.store-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.store-item:hover {
+  transform: translateY(-5px);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.store-item-banner {
+  height: 120px;
+  background-size: cover;
+  background-position: center;
+  background-color: #1a1c23; /* fallback */
+  position: relative;
+}
+
+.store-item-content {
+  padding: 15px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.store-item-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.store-item-desc {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 15px;
+  flex: 1;
+}
+
+.store-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 15px;
+}
+
+.store-tag {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.store-tag.server {
+  background: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+  border: 1px solid rgba(46, 204, 113, 0.3);
+}
+
+.store-item-footer {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.store-version-select {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  padding: 5px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.store-install-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.8rem;
+  transition: filter 0.2s;
+}
+
+.store-install-btn:hover {
+  filter: brightness(1.2);
+}
+
+.footer-left-buttons, .footer-right-buttons {
+  display: flex;
+  gap: 12px;
+  min-width: 150px;
+  align-items: center;
+}
+
+.footer-right-buttons {
+  justify-content: flex-end;
 }
 

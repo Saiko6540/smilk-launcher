@@ -52,60 +52,8 @@ const defaultSettings = {
   ramGb: 12,
   javaPath: '',
   jvmArgs: '-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC',
-  selectedPack: 'stranded_at_sea',
+  instances: [], // Array of installed instances objects: { id, name, mcVersion, loader, branch, versionType }
   mockMode: false // Disabled by default for normal production play
-};
-
-// Default modpacks configuration
-const modpacks = {
-  stranded_at_sea: {
-    name: 'Create: Stranded at sea',
-    mcVersion: '1.20.1',
-    loader: 'fabric-0.15.11',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/sea',
-    mockConfig: {
-      version: '1.2.0',
-      minecraft: '1.20.1',
-      loader: 'fabric-0.15.11',
-      mrpack_url: 'mock://stranded_at_sea/pack.mrpack'
-    }
-  },
-  democky_edition: {
-    name: 'Create +',
-    mcVersion: '1.20.1',
-    loader: 'forge-47.2.0',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/createplus',
-    mockConfig: {
-      version: '1.0.5',
-      minecraft: '1.20.1',
-      loader: 'forge-47.2.0',
-      mrpack_url: 'mock://democky_edition/pack.mrpack'
-    }
-  },
-  cobblemon: {
-    name: 'Cobblemon',
-    mcVersion: '1.20.1',
-    loader: 'fabric-0.15.11',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/cobblemon',
-    mockConfig: {
-      version: '2.1.0',
-      minecraft: '1.20.1',
-      loader: 'fabric-0.15.11',
-      mrpack_url: 'mock://cobblemon/pack.mrpack'
-    }
-  },
-  vanilla_plus: {
-    name: 'Vanilla+',
-    mcVersion: '1.21.1',
-    loader: 'fabric-0.16.5',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/vanilla+',
-    mockConfig: {
-      version: '1.0.0',
-      minecraft: '1.21.1',
-      loader: 'fabric-0.16.5',
-      mrpack_url: 'mock://vanilla_plus/pack.mrpack'
-    }
-  }
 };
 
 function createWindow() {
@@ -312,6 +260,11 @@ ipcMain.on('open-website', () => {
   shell.openExternal('https://submarinemilk.com');
 });
 
+// Open discord externally
+ipcMain.on('open-discord', () => {
+  shell.openExternal('https://discord.gg/f6SVFATANW');
+});
+
 // Open game directory externally
 ipcMain.on('open-instances-dir', () => {
   const instancesDir = path.join(userDataPath, 'game_data', 'instances');
@@ -355,13 +308,13 @@ ipcMain.on('console-window-close', () => {
 
 
 // Check Updates IPC
-ipcMain.handle('check-updates', async (event, packKey) => {
+ipcMain.handle('check-updates', async (event, instanceId) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
-  const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+  const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
   const localVersionFile = path.join(instanceDir, 'local_version.json');
 
-  const pack = modpacks[packKey];
-  if (!pack) throw new Error('Unknown modpack');
+  const instance = settings.instances ? settings.instances.find(i => i.id === instanceId) : null;
+  if (!instance) throw new Error('Unknown instance');
 
   let localVersion = 'none';
   let commitMessage = null;
@@ -379,28 +332,43 @@ ipcMain.handle('check-updates', async (event, packKey) => {
     localVersion,
     commitMessage,
     mcVersion,
-    remoteVersion: 'Checking...', // Will check via start-update
+    remoteVersion: 'Checking...',
     mockMode: settings.mockMode
   };
 });
 
 // Start Update IPC
-ipcMain.handle('start-update', async (event, packKey) => {
+ipcMain.handle('start-update', async (event, instanceId) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
-  const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
-  const pack = modpacks[packKey];
+  const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
+  const instance = settings.instances ? settings.instances.find(i => i.id === instanceId) : null;
 
-  if (!pack) throw new Error('Unknown modpack');
+  if (!instance) throw new Error('Unknown instance');
 
   const sendProgress = (data) => {
-    if (mainWindow) {
-      mainWindow.webContents.send('update-status', data);
-    }
+    if (mainWindow) mainWindow.webContents.send('update-status', data);
   };
 
-  // Run real update
   try {
-    await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress);
+    // Generate configUrl pointing to the selected mrpack on the branch
+    const repoOwner = 'ddidif';
+    const repoName = 'submarinemilkkk';
+    const configUrl = `https://github.com/${repoOwner}/${repoName}/tree/${instance.branch}/${instance.mrpackPath}`;
+    
+    await checkAndInstallUpdate(instanceId, configUrl, instanceDir, sendProgress);
+    
+    // After install, update the local settings with exact MC version / loader from local_version.json
+    const localVersionFile = path.join(instanceDir, 'local_version.json');
+    if (fs.existsSync(localVersionFile)) {
+      const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
+      instance.mcVersion = localConfig.minecraft;
+      instance.loader = localConfig.loader;
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      
+      // Notify renderer that settings updated
+      if (mainWindow) mainWindow.webContents.send('settings-updated', settings);
+    }
+    
     return { success: true };
   } catch (err) {
     sendProgress({ status: 'error', message: err.message });
@@ -409,28 +377,27 @@ ipcMain.handle('start-update', async (event, packKey) => {
 });
 
 // Start Launch IPC
-ipcMain.handle('start-launch', async (event, packKey) => {
+ipcMain.handle('start-launch', async (event, instanceId) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
-  const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
-  const pack = modpacks[packKey];
+  const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
+  const instance = settings.instances ? settings.instances.find(i => i.id === instanceId) : null;
 
-  if (!pack) throw new Error('Unknown modpack');
+  if (!instance) throw new Error('Unknown instance');
 
   const sendProgress = (data) => {
     if (mainWindow) {
       mainWindow.webContents.send('launch-status', data);
     }
 
-    // Discord RPC Update
     if (data.status === 'game_started') {
       setDiscordActivity({
-        details: `Playing: ${pack.name}`,
+        details: `Playing: ${instance.name}`,
         state: `Nickname: ${settings.nickname}`
       });
     } else if (data.status === 'game_exited' || data.status === 'game_crashed' || data.status === 'error') {
       setDiscordActivity({
         details: 'In Menu',
-        state: 'Choosing modpack'
+        state: 'Choosing instance'
       });
     }
 
@@ -447,7 +414,6 @@ ipcMain.handle('start-launch', async (event, packKey) => {
             level = 'warn';
           }
         }
-
         consoleWindow.webContents.send('console-log', {
           message: data.message,
           level: level
@@ -456,11 +422,10 @@ ipcMain.handle('start-launch', async (event, packKey) => {
     }
   };
 
-  // Run real launch
   try {
     const localVersionFile = path.join(instanceDir, 'local_version.json');
     if (!fs.existsSync(localVersionFile)) {
-      throw new Error('Modpack must be installed before launching.');
+      throw new Error('Instance must be installed before launching.');
     }
     const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
 
@@ -663,4 +628,72 @@ ipcMain.handle('upload-log', async (event, instanceDir) => {
     req.write(postData);
     req.end();
   });
+});
+// Get GitHub Store Catalog
+ipcMain.handle('get-github-catalog', async () => {
+  const repoOwner = 'ddidif';
+  const repoName = 'submarinemilkkk';
+  const apiBase = `https://api.github.com/repos/${repoOwner}/${repoName}`;
+  const headers = { 'User-Agent': 'smilk-launcher' };
+
+  try {
+    const fetch = require('node-fetch'); // Electron has fetch natively or we can use https, but Node 20+ has fetch built-in
+  } catch (e) {}
+
+  const response = await fetch(`${apiBase}/branches`, { headers });
+  if (!response.ok) throw new Error('Failed to fetch branches');
+  const branches = await response.json();
+
+  const catalog = [];
+  for (const branch of branches) {
+    if (branch.name === 'main' || branch.name === 'master') continue; // Ignore main branches
+
+    const treeRes = await fetch(`${apiBase}/git/trees/${branch.name}?recursive=1`, { headers });
+    if (!treeRes.ok) continue;
+    const treeData = await treeRes.json();
+    const files = treeData.tree || [];
+
+    // Find resources
+    const hasBanner = files.some(f => f.path.startsWith('banner.'));
+    const hasBackground = files.some(f => f.path.startsWith('background.'));
+    const mrpacks = files.filter(f => f.path.endsWith('.mrpack')).map(f => f.path);
+    
+    // Read README
+    let title = branch.name;
+    let description = '';
+    let tags = [];
+    
+    const readmeFile = files.find(f => f.path.toLowerCase() === 'readme.md');
+    if (readmeFile) {
+      const readmeRes = await fetch(`https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch.name}/${readmeFile.path}`);
+      if (readmeRes.ok) {
+        const readmeText = await readmeRes.text();
+        const lines = readmeText.split('\n').map(l => l.trim());
+        if (lines.length > 0) {
+          title = lines[0].replace(/^#+\s*/, ''); // First line is title
+          
+          const tagLineIndex = lines.findIndex(l => l.toLowerCase().startsWith('tags:'));
+          if (tagLineIndex !== -1) {
+            tags = lines[tagLineIndex].substring(5).split(',').map(t => t.trim());
+          }
+
+          // Description is everything after first 2-3 lines
+          const descStart = tagLineIndex !== -1 ? tagLineIndex + 1 : 1;
+          description = lines.slice(descStart).join('\n').trim();
+        }
+      }
+    }
+
+    catalog.push({
+      branch: branch.name,
+      title,
+      description,
+      tags,
+      mrpacks,
+      bannerUrl: hasBanner ? `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch.name}/banner.png` : null, // Simplification, can be improved to handle .gif
+      backgroundUrl: hasBackground ? `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch.name}/background.png` : null
+    });
+  }
+
+  return catalog;
 });

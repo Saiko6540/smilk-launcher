@@ -11,7 +11,9 @@ contextBridge.exposeInMainWorld('api', {
   startLaunch: (packKey) => ipcRenderer.invoke('start-launch', packKey),
   installJava: (version) => ipcRenderer.invoke('install-java', version),
   uploadLog: (instanceDir) => ipcRenderer.invoke('upload-log', instanceDir),
+  getGithubCatalog: () => ipcRenderer.invoke('get-github-catalog'),
   openWebsite: () => ipcRenderer.send('open-website'),
+  openDiscord: () => ipcRenderer.send('open-discord'),
   openConsoleWindow: () => ipcRenderer.send('open-console-window'),
   openInstancesDir: () => ipcRenderer.send('open-instances-dir'),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
@@ -20,7 +22,6 @@ contextBridge.exposeInMainWorld('api', {
   restoreWindow: () => ipcRenderer.send('window-restore'),
   launcherHide: () => ipcRenderer.send('launcher-hide'),
   launcherShow: () => ipcRenderer.send('launcher-show'),
-
   
   // Event listeners
   onUpdateStatus: (callback) => {
@@ -32,5 +33,10 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('launch-status', listener);
     return () => ipcRenderer.removeListener('launch-status', listener);
+  },
+  onSettingsUpdate: (callback) => {
+    const listener = (event, settings) => callback(settings);
+    ipcRenderer.on('settings-updated', listener);
+    return () => ipcRenderer.removeListener('settings-updated', listener);
   }
 });
