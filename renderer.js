@@ -1926,6 +1926,12 @@ settingsResetBtn.addEventListener('click', async () => {
   }
 });
 
+if (openInstancesBtn) {
+  openInstancesBtn.addEventListener('click', () => {
+    window.api.openInstancesDir();
+  });
+}
+
 settingsClearBtn.addEventListener('click', async () => {
   if (confirm('WARNING! This will delete ALL downloaded modpacks, mods, and game files. Are you completely sure?')) {
     settingsClearBtn.disabled = true;
