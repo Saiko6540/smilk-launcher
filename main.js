@@ -309,7 +309,7 @@ ipcMain.handle('select-java-path', async () => {
 
 // Open website externally
 ipcMain.on('open-website', () => {
-  // shell.openExternal('https://submarinemilk.com');
+  shell.openExternal('https://submarinemilk.com');
 });
 
 // Open game directory externally
