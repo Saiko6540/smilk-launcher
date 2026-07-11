@@ -1737,17 +1737,33 @@ async function checkServerStatus(packKey) {
         if (serverPack && serverPack !== packKey) {
           serverStatusDot.className = 'status-dot offline'; // Using offline (red) dot to indicate mismatch
           serverStatusText.textContent = `Server is on ${packDetails[serverPack].title}`;
+          serverStatusText.title = '';
+          serverStatusText.style.cursor = 'default';
         } else {
           serverStatusDot.className = 'status-dot online';
           serverStatusText.textContent = `${data.players.online}/${data.players.max} Online`;
+          if (data.players.list && data.players.list.length > 0) {
+            serverStatusText.title = 'Players online:\n' + data.players.list.map(p => p.name_clean).join('\n');
+            serverStatusText.style.cursor = 'help';
+          } else if (data.players.online > 0) {
+            serverStatusText.title = 'Players are hidden by the server';
+            serverStatusText.style.cursor = 'help';
+          } else {
+            serverStatusText.title = 'No players online';
+            serverStatusText.style.cursor = 'default';
+          }
         }
       } else {
         serverStatusDot.className = 'status-dot offline';
         serverStatusText.textContent = 'Offline';
+        serverStatusText.title = '';
+        serverStatusText.style.cursor = 'default';
       }
     } catch (err) {
       serverStatusDot.className = 'status-dot offline';
       serverStatusText.textContent = 'Error';
+      serverStatusText.title = '';
+      serverStatusText.style.cursor = 'default';
     }
   };
 
