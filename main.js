@@ -93,6 +93,18 @@ const modpacks = {
       loader: 'fabric-0.15.11',
       mrpack_url: 'mock://cobblemon/pack.mrpack'
     }
+  },
+  vanilla_plus: {
+    name: 'Vanilla+',
+    mcVersion: '1.21.1',
+    loader: 'fabric-0.16.5',
+    configUrl: 'https://raw.githubusercontent.com/Saiko/vanilla-plus/main/version.json',
+    mockConfig: {
+      version: '1.0.0',
+      minecraft: '1.21.1',
+      loader: 'fabric-0.16.5',
+      mrpack_url: 'mock://vanilla_plus/pack.mrpack'
+    }
   }
 };
 

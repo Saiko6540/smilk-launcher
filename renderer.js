@@ -20,6 +20,13 @@ const packDetails = {
     mcVersion: '1.20.1',
     loader: 'Fabric-0.15.11',
     serverIp: '185.206.149.27:25601'
+  },
+  vanilla_plus: {
+    title: 'Vanilla+',
+    description: 'A true adventure awaits. Explore dangerous new dungeons, battle fearsome mobs, and discover ancient loot — all in the classic Minecraft spirit.',
+    mcVersion: '1.21.1',
+    loader: 'Fabric-0.16.5',
+    serverIp: '185.206.149.27:25601'
   }
 };
 
@@ -967,6 +974,8 @@ function animate() {
     drawDemockyScene();
   } else if (activeTheme === 'theme-cobblemon') {
     drawPokemonScene();
+  } else if (activeTheme === 'theme-vanilla') {
+    drawVanillaScene();
   }
 
   requestAnimationFrame(animate);
@@ -1429,6 +1438,217 @@ function drawPixelTree(x, groundY) {
   ctx.restore();
 }
 
+// ============ VANILLA+ — DARK FOREST DUNGEON SCENE ============
+let vanillaTime = 0;
+let fireflies = [];
+let fallingLeaves = [];
+
+class Firefly {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * (canvas.width || 800);
+    this.y = Math.random() * (canvas.height || 600) * 0.7;
+    this.size = Math.random() * 3 + 1.5;
+    this.speed = Math.random() * 0.3 + 0.1;
+    this.angle = Math.random() * Math.PI * 2;
+    this.pulse = Math.random() * Math.PI * 2;
+    this.drift = Math.random() * 0.5 + 0.2;
+  }
+  update() {
+    this.angle += this.speed * 0.02;
+    this.pulse += 0.05;
+    this.x += Math.sin(this.angle) * this.drift;
+    this.y += Math.cos(this.angle * 0.7) * this.drift * 0.5;
+    if (this.x < -20 || this.x > canvas.width + 20 || this.y < -20 || this.y > canvas.height) this.reset();
+  }
+  draw() {
+    const glow = (Math.sin(this.pulse) + 1) * 0.5;
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size + glow * 2, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(180, 255, 50, ${0.15 + glow * 0.3})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(220, 255, 100, ${0.6 + glow * 0.4})`;
+    ctx.fill();
+  }
+}
+
+class FallingLeaf {
+  constructor() { this.reset(); }
+  reset() {
+    this.x = Math.random() * (canvas.width || 800);
+    this.y = -10;
+    this.size = Math.random() * 4 + 3;
+    this.speedY = Math.random() * 0.8 + 0.3;
+    this.speedX = Math.random() * 0.4 - 0.2;
+    this.rot = Math.random() * Math.PI * 2;
+    this.rotSpeed = (Math.random() - 0.5) * 0.03;
+    this.sway = Math.random() * Math.PI * 2;
+    this.swaySpeed = Math.random() * 0.02 + 0.01;
+    const leafColors = ['#8B4513', '#A0522D', '#D2691E', '#2e7d32', '#388e3c', '#cc7722'];
+    this.color = leafColors[Math.floor(Math.random() * leafColors.length)];
+  }
+  update() {
+    this.y += this.speedY;
+    this.sway += this.swaySpeed;
+    this.x += this.speedX + Math.sin(this.sway) * 0.5;
+    this.rot += this.rotSpeed;
+    if (this.y > canvas.height + 10) this.reset();
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.fillStyle = this.color;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, this.size, this.size * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawVanillaScene() {
+  vanillaTime += 0.005;
+  const W = canvas.width;
+  const H = canvas.height;
+  const groundY = H * 0.78;
+
+  // === DARK NIGHT SKY ===
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+  skyGrad.addColorStop(0, '#050a05');
+  skyGrad.addColorStop(0.3, '#0a1a0a');
+  skyGrad.addColorStop(0.6, '#102010');
+  skyGrad.addColorStop(1, '#1a3a1a');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, groundY);
+
+  // === STARS ===
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 97.3 + 30) % W;
+    const sy = (i * 53.1 + 10) % (H * 0.35);
+    const twinkle = (Math.sin(vanillaTime * 3 + i) + 1) * 0.3 + 0.2;
+    ctx.fillStyle = `rgba(255, 255, 230, ${twinkle})`;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+
+  // === MOON ===
+  const moonX = W * 0.82;
+  const moonY = H * 0.12;
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, 25, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(230, 230, 200, 0.15)';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(moonX, moonY, 18, 0, Math.PI * 2);
+  ctx.fillStyle = '#e8e8d0';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(moonX + 5, moonY - 3, 15, 0, Math.PI * 2);
+  ctx.fillStyle = '#050a05';
+  ctx.fill();
+
+  // === DISTANT FOREST SILHOUETTES ===
+  ctx.fillStyle = '#0a150a';
+  for (let i = 0; i < W; i += 40) {
+    const treeH = 50 + Math.sin(i * 0.05) * 25 + Math.cos(i * 0.08) * 15;
+    ctx.fillRect(i, groundY - treeH, 35, treeH);
+    // Triangle tops
+    ctx.beginPath();
+    ctx.moveTo(i - 5, groundY - treeH);
+    ctx.lineTo(i + 17, groundY - treeH - 30);
+    ctx.lineTo(i + 40, groundY - treeH);
+    ctx.fill();
+  }
+
+  // === CLOSER TREES ===
+  ctx.fillStyle = '#0d1f0d';
+  for (let i = 20; i < W; i += 100) {
+    const treeH = 80 + Math.sin(i * 0.03 + 1) * 30;
+    ctx.fillRect(i + 10, groundY - treeH, 15, treeH);
+    // Canopy
+    ctx.beginPath();
+    ctx.moveTo(i - 10, groundY - treeH);
+    ctx.lineTo(i + 17, groundY - treeH - 45);
+    ctx.lineTo(i + 45, groundY - treeH);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(i - 5, groundY - treeH + 15);
+    ctx.lineTo(i + 17, groundY - treeH - 30);
+    ctx.lineTo(i + 40, groundY - treeH + 15);
+    ctx.fill();
+  }
+
+  // === DUNGEON ENTRANCE (center) ===
+  const dX = W * 0.5 - 50;
+  const dY = groundY - 5;
+  // Stone archway
+  ctx.fillStyle = '#3a3a3a';
+  ctx.fillRect(dX, dY - 60, 15, 60);
+  ctx.fillRect(dX + 85, dY - 60, 15, 60);
+  ctx.fillRect(dX, dY - 70, 100, 15);
+  // Darker arch
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(dX + 5, dY - 65, 10, 5);
+  ctx.fillRect(dX + 85, dY - 65, 10, 5);
+  // Dark inside
+  ctx.fillStyle = '#050505';
+  ctx.fillRect(dX + 15, dY - 55, 70, 55);
+  // Glowing runes on sides
+  const runeGlow = (Math.sin(vanillaTime * 4) + 1) * 0.5;
+  ctx.fillStyle = `rgba(76, 175, 80, ${0.3 + runeGlow * 0.5})`;
+  ctx.fillRect(dX + 3, dY - 45, 8, 3);
+  ctx.fillRect(dX + 3, dY - 35, 8, 3);
+  ctx.fillRect(dX + 3, dY - 25, 8, 3);
+  ctx.fillRect(dX + 89, dY - 45, 8, 3);
+  ctx.fillRect(dX + 89, dY - 35, 8, 3);
+  ctx.fillRect(dX + 89, dY - 25, 8, 3);
+  // Glowing eyes inside
+  const eyeGlow = (Math.sin(vanillaTime * 2 + 1) + 1) * 0.5;
+  ctx.fillStyle = `rgba(255, 50, 50, ${0.4 + eyeGlow * 0.6})`;
+  ctx.fillRect(dX + 35, dY - 35, 4, 4);
+  ctx.fillRect(dX + 55, dY - 35, 4, 4);
+
+  // === GROUND ===
+  const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
+  groundGrad.addColorStop(0, '#1a3a1a');
+  groundGrad.addColorStop(0.3, '#152a15');
+  groundGrad.addColorStop(1, '#0a1a0a');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, groundY, W, H - groundY);
+
+  // Grass tufts
+  ctx.fillStyle = '#2e7d32';
+  for (let i = 0; i < W; i += 12) {
+    const h = 4 + Math.sin(i + vanillaTime * 2) * 2;
+    ctx.fillRect(i, groundY - h, 3, h);
+  }
+
+  // === PATH (stone bricks) ===
+  ctx.fillStyle = '#4a4a4a';
+  for (let i = 0; i < 6; i++) {
+    const px = dX + 25 + i * 8;
+    ctx.fillRect(px, dY, 6, 4);
+    ctx.fillRect(px + 3, dY + 5, 6, 4);
+  }
+
+  // === FIREFLIES ===
+  if (fireflies.length === 0) {
+    for (let i = 0; i < 20; i++) fireflies.push(new Firefly());
+  }
+  fireflies.forEach(f => { f.update(); f.draw(); });
+
+  // === FALLING LEAVES ===
+  if (fallingLeaves.length === 0) {
+    for (let i = 0; i < 12; i++) {
+      const leaf = new FallingLeaf();
+      leaf.y = Math.random() * H;
+      fallingLeaves.push(leaf);
+    }
+  }
+  fallingLeaves.forEach(l => { l.update(); l.draw(); });
+}
+
 // Change Modpack Theme & View
 function switchModpack(packKey) {
   if (launcherState !== 'ready') return; // block switching while installing/running
@@ -1439,6 +1659,7 @@ function switchModpack(packKey) {
   if (packKey === 'stranded_at_sea') activeTheme = 'theme-stranded';
   else if (packKey === 'democky_edition') activeTheme = 'theme-democky';
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
+  else if (packKey === 'vanilla_plus') activeTheme = 'theme-vanilla';
   
   // CSS Transition
   document.body.classList.remove(oldTheme);
