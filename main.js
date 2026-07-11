@@ -281,7 +281,7 @@ ipcMain.handle('reset-settings', () => {
 // Clear Instances IPC
 ipcMain.handle('clear-instances', () => {
   try {
-    const instancesDir = path.join(__dirname, 'game_data', 'instances');
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
     if (fs.existsSync(instancesDir)) {
       fs.rmSync(instancesDir, { recursive: true, force: true });
     }
