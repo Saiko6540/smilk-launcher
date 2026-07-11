@@ -52,7 +52,7 @@ function fetchText(url) {
 function runCommand(cmd, args, options = {}) {
   return new Promise((resolve, reject) => {
     console.log(`Running command: ${cmd} ${args.join(' ')}`);
-    const proc = spawn(cmd, args, options);
+    const proc = spawn(cmd, args, { windowsHide: true, ...options });
     let stdout = '';
     let stderr = '';
 
@@ -184,21 +184,30 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     customArgs = jvmArgs.trim().split(/\s+/);
   }
 
-  const opts = {
-    authorization: Authenticator.getAuth(nickname || 'Player'),
-    root: instanceDir,
-    version: {
-      number: mcVersion,
-      type: 'release',
-      ...(customVersionId ? { custom: customVersionId } : {})
-    },
-    memory: {
-      max: memoryMax,
-      min: '1G'
-    },
-    ...(javaPath ? { javaPath: javaPath } : {}),
-    ...(customArgs.length ? { customArgs: customArgs } : {})
-  };
+    // Determine correct java executable to avoid console window popup
+    let finalJavaPath = javaPath;
+    if (!finalJavaPath) {
+      finalJavaPath = process.platform === 'win32' ? 'javaw' : 'java';
+    } else if (process.platform === 'win32' && finalJavaPath.toLowerCase().endsWith('java.exe')) {
+      // If user selected java.exe, try to quietly replace it with javaw.exe
+      finalJavaPath = finalJavaPath.replace(/java\.exe$/i, 'javaw.exe');
+    }
+
+    const opts = {
+      authorization: Authenticator.getAuth(nickname || 'Player'),
+      root: instanceDir,
+      version: {
+        number: mcVersion,
+        type: 'release',
+        ...(customVersionId ? { custom: customVersionId } : {})
+      },
+      memory: {
+        max: memoryMax,
+        min: '1G'
+      },
+      javaPath: finalJavaPath,
+      ...(customArgs.length ? { customArgs: customArgs } : {})
+    };
 
   console.log('Launching MCLC with options:', JSON.stringify({
     ...opts,
