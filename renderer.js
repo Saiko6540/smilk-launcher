@@ -2226,13 +2226,20 @@ function switchInstance(instanceId) {
   statMcVerEl.textContent = instance.mcVersion || 'Unknown';
   statLoaderEl.textContent = instance.loader || 'Unknown';
 
+  // CSS Theme Fallback
+  document.body.className = ''; // Reset themes
+  if (instance.branch === 'stranded_at_sea') document.body.classList.add('theme-stranded');
+  else if (instance.branch === 'democky_edition') document.body.classList.add('theme-democky');
+  else if (instance.branch === 'cobblemon') document.body.classList.add('theme-cobblemon');
+  else if (instance.branch === 'vanilla_plus') document.body.classList.add('theme-vanilla');
+
   // Dynamic Background
   if (instance.backgroundUrl) {
     document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.6), rgba(10, 10, 12, 0.8)), url('${instance.backgroundUrl}')`;
     document.body.style.backgroundSize = 'cover';
     document.body.style.backgroundPosition = 'center';
   } else {
-    document.body.style.backgroundImage = 'none';
+    document.body.style.backgroundImage = ''; // Allow CSS gradient to apply
   }
 
   updateVersionCheck();
