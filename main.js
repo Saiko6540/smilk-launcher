@@ -476,9 +476,79 @@ ipcMain.handle('start-launch', async (event, packKey) => {
     );
     return { success: true };
   } catch (err) {
+    if (err.javaError) {
+      sendProgress({ status: 'java-error', requiredVersion: err.requiredVersion, message: err.message });
+      return { success: false, javaError: true, requiredVersion: err.requiredVersion, error: err.message };
+    }
     sendProgress({ status: 'error', message: err.message });
     return { success: false, error: err.message };
   }
+});
+
+// Install Java IPC
+ipcMain.handle('install-java', async (event, requiredVersion) => {
+  const AdmZip = require('adm-zip');
+  
+  const javaDir = path.join(userDataPath, 'game_data', 'java', `jre_${requiredVersion}`);
+  if (fs.existsSync(javaDir)) {
+    fs.rmSync(javaDir, { recursive: true, force: true });
+  }
+  fs.mkdirSync(javaDir, { recursive: true });
+
+  const zipPath = path.join(javaDir, `jre_${requiredVersion}.zip`);
+  const apiUrl = `https://api.adoptium.net/v3/binary/latest/${requiredVersion}/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk`;
+
+  // Download ZIP
+  await new Promise((resolve, reject) => {
+    https.get(apiUrl, (res) => {
+      if (res.statusCode === 302 || res.statusCode === 301) {
+        https.get(res.headers.location, (redirectRes) => {
+          const file = fs.createWriteStream(zipPath);
+          redirectRes.pipe(file);
+          file.on('finish', () => { file.close(); resolve(); });
+          file.on('error', reject);
+        }).on('error', reject);
+      } else {
+        const file = fs.createWriteStream(zipPath);
+        res.pipe(file);
+        file.on('finish', () => { file.close(); resolve(); });
+        file.on('error', reject);
+      }
+    }).on('error', reject);
+  });
+
+  // Extract ZIP
+  const zip = new AdmZip(zipPath);
+  zip.extractAllTo(javaDir, true);
+  fs.unlinkSync(zipPath); // Delete zip
+
+  // Find javaw.exe
+  let newJavaPath = null;
+  function findJavaw(dir) {
+    const files = fs.readdirSync(dir);
+    for (const f of files) {
+      const fullPath = path.join(dir, f);
+      if (fs.statSync(fullPath).isDirectory()) {
+        const found = findJavaw(fullPath);
+        if (found) return found;
+      } else if (f.toLowerCase() === 'javaw.exe') {
+        return fullPath;
+      }
+    }
+    return null;
+  }
+  newJavaPath = findJavaw(javaDir);
+
+  if (!newJavaPath) {
+    throw new Error("Downloaded Java but couldn't find javaw.exe inside!");
+  }
+
+  // Update Settings
+  const currentSettings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
+  currentSettings.javaPath = newJavaPath;
+  fs.writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2), 'utf8');
+
+  return { success: true, javaPath: newJavaPath };
 });
 
 // Open Console Window IPC

@@ -177,7 +177,10 @@ function checkJavaVersion(javaPath, mcVersion) {
 
     exec(`"${javaExeForCheck}" -version`, (error, stdout, stderr) => {
       if (error) {
-         return reject(new Error(`Failed to check Java version. Is Java installed correctly? Path: ${javaPath}`));
+         const err = new Error(`Java was not found on your system.`);
+         err.javaError = true;
+         err.requiredVersion = minJavaVersion;
+         return reject(err);
       }
       const output = stderr || stdout;
       const match = output.match(/(?:java|openjdk) version "([^"]+)"/);
@@ -190,7 +193,10 @@ function checkJavaVersion(javaPath, mcVersion) {
           major = parseInt(versionStr.split('.')[0], 10);
         }
         if (major > 0 && major < minJavaVersion) {
-          return reject(new Error(`Minecraft ${mcVersion} requires Java ${minJavaVersion} or later, but you are using Java ${major}.\n\nPlease update your Java or change the Java Path in Settings.`));
+          const err = new Error(`Minecraft ${mcVersion} requires Java ${minJavaVersion} or later, but you are using Java ${major}.`);
+          err.javaError = true;
+          err.requiredVersion = minJavaVersion;
+          return reject(err);
         }
         resolve(major);
       } else {

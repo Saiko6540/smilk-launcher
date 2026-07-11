@@ -2105,6 +2105,58 @@ window.api.onLaunchStatus((data) => {
       document.body.classList.remove('fade-out');
       window.api.restoreWindow();
     }, 100);
+  } else if (data.status === 'java-error') {
+    launcherState = 'error';
+    playBtn.disabled = false;
+    progressContainer.classList.add('hidden');
+    clearTimeout(hideTimeout);
+    window.api.launcherShow();
+    document.body.classList.remove('fade-out');
+    updateVersionCheck();
+
+    // Show Java Error Modal
+    const javaModal = document.getElementById('java-error-modal');
+    const javaDesc = document.getElementById('java-error-desc');
+    const javaAutoBtn = document.getElementById('java-auto-btn');
+    const javaManualBtn = document.getElementById('java-manual-btn');
+    const javaCloseBtn = document.getElementById('java-modal-close');
+    
+    javaDesc.textContent = data.message;
+    
+    javaCloseBtn.onclick = () => {
+      javaModal.classList.add('hidden');
+    };
+    
+    javaManualBtn.onclick = () => {
+      window.api.openWebsite(); // Or we can add an openUrl IPC, but they can just go to the discord or oracle
+      // Let's actually add a quick fetch to open Adoptium:
+      const electron = require('electron'); // Wait, renderer doesn't have require if contextIsolation is true!
+      // I'll just use window.open since electron intercepts it sometimes, or just tell them to use settings.
+      window.open('https://adoptium.net/');
+    };
+    
+    javaAutoBtn.onclick = async () => {
+      document.getElementById('java-modal-footer').classList.add('hidden');
+      document.getElementById('java-download-progress').classList.remove('hidden');
+      try {
+        const result = await window.api.installJava(data.requiredVersion);
+        if (result && result.success) {
+          javaModal.classList.add('hidden');
+          // Update the input field in settings if it's open
+          document.getElementById('settings-javapath').value = result.javaPath;
+          alert('Java installed successfully! You can now launch the game.');
+        } else {
+          throw new Error('Installation failed without throwing an error');
+        }
+      } catch (e) {
+        alert('Failed to automatically download Java: ' + e.message);
+        document.getElementById('java-modal-footer').classList.remove('hidden');
+        document.getElementById('java-download-progress').classList.add('hidden');
+      }
+    };
+    
+    javaModal.classList.remove('hidden');
+
   } else if (data.status === 'error') {
     launcherState = 'error';
     playBtn.disabled = false;

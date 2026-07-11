@@ -246,6 +246,35 @@
     </div>
   </div>
 
+  <!-- Java Error Modal -->
+  <div class="modal-overlay hidden" id="java-error-modal">
+    <div class="settings-card java-error-card">
+      <div class="modal-header">
+        <h2 style="color: #ff4757;">Java Not Found</h2>
+        <button class="close-btn" id="java-modal-close">&times;</button>
+      </div>
+      
+      <div class="modal-body" style="text-align: center; padding: 2rem;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">☕</div>
+        <h3 id="java-error-title" style="margin-bottom: 1rem;">Java is required to play Minecraft</h3>
+        <p id="java-error-desc" style="color: rgba(255, 255, 255, 0.7); margin-bottom: 1.5rem;">
+          You need Java 21 or later to launch this modpack, but it couldn't be found on your system.
+        </p>
+        <div class="java-download-progress hidden" id="java-download-progress">
+          <p id="java-download-text">Downloading Java... Please wait.</p>
+          <div class="progress-bar-container" style="margin-top: 10px; width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+            <div class="progress-bar-fill" id="java-progress-fill" style="width: 0%; height: 100%; background: #44bd32; transition: width 0.3s ease;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="justify-content: center; gap: 1rem;" id="java-modal-footer">
+        <button id="java-manual-btn" class="secondary-btn">Download Manually</button>
+        <button id="java-auto-btn" class="save-btn" style="background: linear-gradient(135deg, #44bd32 0%, #27ae60 100%); border: none;">Install Automatically</button>
+      </div>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>
