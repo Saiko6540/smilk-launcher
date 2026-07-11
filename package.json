@@ -9,7 +9,7 @@
   },
   "build": {
     "appId": "com.smilk.launcher",
-    "productName": "smilk launcher",
+    "productName": "smilk",
     "directories": {
       "output": "dist"
     },

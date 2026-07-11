@@ -71,7 +71,7 @@ const modpacks = {
     }
   },
   democky_edition: {
-    name: 'Create plus',
+    name: 'Create +',
     mcVersion: '1.20.1',
     loader: 'forge-47.2.0',
     configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/createplus/modpack_test_1.0.0.mrpack',
@@ -115,7 +115,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     frame: false, // Turn off default OS frame
-    title: 'smilk launcher',
+    title: 'smilk',
     icon: path.join(__dirname, 'icon.png'),
     backgroundColor: '#0a0a0c',
     webPreferences: {

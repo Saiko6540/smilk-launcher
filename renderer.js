@@ -8,7 +8,7 @@ const packDetails = {
     serverIp: '185.206.149.27:25601'
   },
   democky_edition: {
-    title: 'Create plus',
+    title: 'Create +',
     description: 'Steampunk machinery combined with extreme survival on land. Build complex clockwork railways, steam factories, and automate everything.',
     mcVersion: '1.20.1',
     loader: 'Forge-47.2.0',
