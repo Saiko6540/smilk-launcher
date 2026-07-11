@@ -32,6 +32,8 @@ function setDiscordActivity(data) {
       details: data.details,
       state: data.state,
       startTimestamp,
+      largeImageKey: 'icon',
+      largeImageText: 'smilk launcher',
       instance: false,
     });
   } catch (e) {}
