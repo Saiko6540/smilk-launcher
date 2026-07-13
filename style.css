@@ -457,10 +457,10 @@ body.fade-out {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   color: #fff;
-  font-size: 15px;
+  font-size: 11px;
   font-weight: 600;
   padding: 5px 10px;
-  width: 120px;
+  width: 110px;
   outline: none;
   transition: all 0.3s ease;
 }
@@ -727,6 +727,10 @@ body.fade-out {
   font-size: 14px;
   outline: none;
   transition: all 0.3s ease;
+}
+
+#settings-nickname {
+  font-size: 12px;
 }
 
 .form-group input[type="text"]:focus {

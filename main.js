@@ -213,16 +213,55 @@ function log(level, message) {
 }
 
 app.whenReady().then(() => {
+  // Clear HTTP/Image cache to prevent memory leaks over time
+  const { session } = require('electron');
+  session.defaultSession.clearCache().then(() => {
+    console.log('Session cache cleared successfully to free memory');
+  });
+
   createWindow();
   initDiscordRPC();
 
-  // Check for auto-updates (silently in background)
-  autoUpdater.checkForUpdatesAndNotify();
+  // Check for auto-updates explicitly
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on('update-downloaded', () => {
-    log('info', 'App update downloaded. It will be installed on quit.');
-    // Optionally: autoUpdater.quitAndInstall(); here if you want immediate restart
+  autoUpdater.on('checking-for-update', () => {
+    if (mainWindow) mainWindow.webContents.send('app-update-state', { status: 'checking' });
   });
+
+  autoUpdater.on('update-available', (info) => {
+    log('info', 'App update available.');
+    if (mainWindow) mainWindow.webContents.send('app-update-state', { status: 'available', version: info.version });
+  });
+
+  autoUpdater.on('update-not-available', (info) => {
+    log('info', 'App update not available.');
+    if (mainWindow) mainWindow.webContents.send('app-update-state', { status: 'not-available' });
+  });
+
+  autoUpdater.on('error', (err) => {
+    log('error', 'Error in auto-updater: ' + err.message);
+    if (mainWindow) mainWindow.webContents.send('app-update-state', { status: 'error', message: err.message });
+  });
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    if (mainWindow) mainWindow.webContents.send('app-update-state', {
+      status: 'progress',
+      percent: progressObj.percent,
+      bytesPerSecond: progressObj.bytesPerSecond,
+      transferred: progressObj.transferred,
+      total: progressObj.total
+    });
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log('info', 'App update downloaded. Ready to install.');
+    if (mainWindow) mainWindow.webContents.send('app-update-state', { status: 'downloaded' });
+  });
+
+  // Start the check
+  autoUpdater.checkForUpdates();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -231,6 +270,10 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+ipcMain.handle('install-app-update', () => {
+  autoUpdater.quitAndInstall(false, true);
 });
 
 // Load Settings IPC

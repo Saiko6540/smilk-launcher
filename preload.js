@@ -21,9 +21,15 @@ contextBridge.exposeInMainWorld('api', {
   launcherHide: () => ipcRenderer.send('launcher-hide'),
   launcherShow: () => ipcRenderer.send('launcher-show'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  installAppUpdate: () => ipcRenderer.invoke('install-app-update'),
 
   
   // Event listeners
+  onAppUpdateState: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('app-update-state', listener);
+    return () => ipcRenderer.removeListener('app-update-state', listener);
+  },
   onUpdateStatus: (callback) => {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('update-status', listener);

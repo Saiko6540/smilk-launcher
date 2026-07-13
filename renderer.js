@@ -98,6 +98,7 @@ let ships = [];
 let rafts = [];
 let pokemons = [];
 let pokeballs = [];
+let vanillaMobs = [];
 
 // Canvas Resize Handler
 function resizeCanvas() {
@@ -963,10 +964,21 @@ function initParticles() {
   for (let i = 0; i < 5; i++) {
     seagulls.push(new Seagull());
   }
+
+  // Vanilla+ mobs
+  vanillaMobs = [];
+  vanillaMobs.push(new VanillaMob('creeper'));
+  vanillaMobs.push(new VanillaMob('zombie'));
+  vanillaMobs.push(new VanillaMob('skeleton'));
 }
 
 // Background Animation Loop
 function animate() {
+  requestAnimationFrame(animate);
+  
+  // Pause rendering to save CPU/GPU when the game is running
+  if (launcherState === 'playing') return;
+
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   if (activeTheme === 'theme-stranded') {
@@ -978,8 +990,6 @@ function animate() {
   } else if (activeTheme === 'theme-vanilla') {
     drawVanillaScene();
   }
-
-  requestAnimationFrame(animate);
 }
 
 // ============ STRANDED AT SEA — FULL OCEAN SCENE ============
@@ -1439,6 +1449,132 @@ function drawPixelTree(x, groundY) {
   ctx.restore();
 }
 
+class VanillaMob {
+  constructor(type) {
+    this.type = type;
+    this.x = Math.random() * (canvas.width * 0.6) + canvas.width * 0.2;
+    this.speed = Math.random() * 0.4 + 0.3;
+    this.direction = Math.random() > 0.5 ? 1 : -1;
+    this.walkCycle = Math.random() * Math.PI * 2;
+    this.scale = 0.95;
+  }
+  update() {
+    this.walkCycle += 0.08;
+    this.x += this.speed * this.direction;
+    if (this.x < 50) this.direction = 1;
+    if (this.x > canvas.width - 50) this.direction = -1;
+  }
+  draw(groundY) {
+    ctx.save();
+    ctx.translate(this.x, groundY);
+    ctx.scale(this.direction * this.scale, this.scale);
+    const s = 3; // pixel size
+
+    // Leg swinging
+    const legOffset1 = Math.sin(this.walkCycle) * 3;
+    const legOffset2 = -Math.sin(this.walkCycle) * 3;
+
+    if (this.type === 'creeper') {
+      // Head
+      ctx.fillStyle = '#4caf50'; // Green
+      ctx.fillRect(-4 * s, -24 * s, 8 * s, 8 * s);
+      // Face
+      ctx.fillStyle = '#1b5e20'; // Dark green details
+      ctx.fillRect(-3 * s, -23 * s, s, s);
+      ctx.fillRect(2 * s, -20 * s, s, s);
+      ctx.fillStyle = '#000000'; // Eyes
+      ctx.fillRect(-3 * s, -21 * s, 2 * s, 2 * s);
+      ctx.fillRect(1 * s, -21 * s, 2 * s, 2 * s);
+      // Mouth
+      ctx.fillRect(-1.5 * s, -19 * s, 3 * s, 3 * s);
+      ctx.fillRect(-2.5 * s, -17 * s, s, 2 * s);
+      ctx.fillRect(1.5 * s, -17 * s, s, 2 * s);
+
+      // Body
+      ctx.fillStyle = '#388e3c'; // Green
+      ctx.fillRect(-3 * s, -16 * s, 6 * s, 10 * s);
+
+      // Legs
+      ctx.fillStyle = '#1b5e20'; // Back legs
+      ctx.fillRect(-4 * s + legOffset1, -6 * s, 3 * s, 6 * s);
+      ctx.fillRect(1 * s + legOffset2, -6 * s, 3 * s, 6 * s);
+      ctx.fillStyle = '#2e7d32'; // Front legs
+      ctx.fillRect(-2 * s + legOffset2, -6 * s, 3 * s, 6 * s);
+      ctx.fillRect(legOffset1, -6 * s, 3 * s, 6 * s);
+    } 
+    else if (this.type === 'zombie') {
+      // Head
+      ctx.fillStyle = '#558b2f';
+      ctx.fillRect(-4 * s, -28 * s, 8 * s, 8 * s);
+      // Eyes
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(-3 * s, -24 * s, 2 * s, s);
+      ctx.fillRect(1 * s, -24 * s, 2 * s, s);
+
+      // Shirt
+      ctx.fillStyle = '#00838f'; // Cyan
+      ctx.fillRect(-3 * s, -20 * s, 6 * s, 10 * s);
+
+      // Arms (Zombie arms reach forward!)
+      ctx.fillStyle = '#558b2f';
+      ctx.fillRect(1 * s, -19 * s, 7 * s, 3 * s);
+      ctx.fillStyle = '#006064'; // Sleeve
+      ctx.fillRect(1 * s, -19 * s, 2 * s, 3 * s);
+
+      // Pants
+      ctx.fillStyle = '#1a237e';
+      ctx.fillRect(-2.5 * s, -10 * s, 5 * s, 4 * s);
+
+      // Legs
+      ctx.fillStyle = '#0d47a1';
+      ctx.fillRect(-2.5 * s + legOffset1, -6 * s, 2.5 * s, 6 * s);
+      ctx.fillStyle = '#1a237e';
+      ctx.fillRect(0.2 * s + legOffset2, -6 * s, 2.5 * s, 6 * s);
+    } 
+    else if (this.type === 'skeleton') {
+      // Head
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(-4 * s, -28 * s, 8 * s, 8 * s);
+      // Face
+      ctx.fillStyle = '#212121';
+      ctx.fillRect(-3 * s, -24 * s, 2 * s, 2 * s);
+      ctx.fillRect(1 * s, -24 * s, 2 * s, 2 * s);
+
+      // Ribs / Spine
+      ctx.fillStyle = '#cccccc';
+      ctx.fillRect(-1 * s, -20 * s, 2 * s, 10 * s);
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(-3 * s, -19 * s, 6 * s, s);
+      ctx.fillRect(-3 * s, -17 * s, 6 * s, s);
+      ctx.fillRect(-3 * s, -15 * s, 6 * s, s);
+
+      // Arms (holding a bow, pointing forward)
+      ctx.fillStyle = '#e0e0e0';
+      // Left arm aiming forward
+      ctx.fillRect(1 * s, -18 * s, 4 * s, 1.5 * s);
+      // Right arm holding string
+      ctx.fillRect(-3 * s, -19 * s, 3 * s, 1.5 * s);
+
+      // Bow (Wood)
+      ctx.fillStyle = '#8d6e63'; // Brown bow
+      ctx.fillRect(5 * s, -22 * s, s, 9 * s);
+      ctx.fillRect(4 * s, -23 * s, s, s);
+      ctx.fillRect(4 * s, -14 * s, s, s);
+      
+      // Bow String
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(3 * s, -22 * s, 0.5 * s, 9 * s);
+
+      // Legs
+      ctx.fillStyle = '#bdbdbd';
+      ctx.fillRect(-2 * s + legOffset1, -10 * s, s, 10 * s);
+      ctx.fillRect(1 * s + legOffset2, -10 * s, s, 10 * s);
+    }
+
+    ctx.restore();
+  }
+}
+
 // ============ VANILLA+ — DARK FOREST DUNGEON SCENE ============
 let vanillaTime = 0;
 let fireflies = [];
@@ -1647,11 +1783,20 @@ function drawVanillaScene() {
     }
   }
   fallingLeaves.forEach(l => { l.update(); l.draw(); });
+
+  // === VANILLA MOBS ===
+  if (vanillaMobs.length === 0) {
+    vanillaMobs.push(new VanillaMob('creeper'));
+    vanillaMobs.push(new VanillaMob('zombie'));
+    vanillaMobs.push(new VanillaMob('skeleton'));
+  }
+  vanillaMobs.forEach(m => { m.update(); m.draw(groundY); });
 }
 
 // Change Modpack Theme & View
 function switchModpack(packKey) {
   if (launcherState !== 'ready') return; // block switching while installing/running
+  if (activePack === packKey && document.body.classList.contains(activeTheme)) return; // Already active
   
   activePack = packKey;
   const oldTheme = activeTheme;
@@ -1660,6 +1805,9 @@ function switchModpack(packKey) {
   else if (packKey === 'democky_edition') activeTheme = 'theme-democky';
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
   else if (packKey === 'vanilla_plus') activeTheme = 'theme-vanilla';
+  
+  // Re-initialize particles on theme change (clears old ones and respawns them)
+  initParticles();
   
   // CSS Transition
   document.body.classList.remove(oldTheme);
@@ -1836,8 +1984,10 @@ async function loadSettings() {
   if (settings.ramGb < 2) settings.ramGb = 2;
   
   // Sync fields
-  usernameInput.value = settings.nickname;
-  settingsNickname.value = settings.nickname;
+  if (settings.nickname) {
+    if (settingsNickname) settingsNickname.value = settings.nickname;
+    if (usernameInput) usernameInput.value = settings.nickname;
+  }
   settingsRam.value = settings.ramGb;
   ramValueLabel.textContent = `${settings.ramGb} GB`;
   settingsJava.value = settings.javaPath || '';
@@ -1876,8 +2026,43 @@ async function saveSettingsData() {
   }
 }
 
+let avatarDebounceTimeout = null;
+
 function updateUserAvatar(name) {
-  avatarPreview.textContent = (name && name[0]) ? name[0].toUpperCase() : 'P';
+  if (name && name.trim() !== '') {
+    avatarPreview.textContent = '';
+    
+    // Clear previous timeout
+    if (avatarDebounceTimeout) clearTimeout(avatarDebounceTimeout);
+    
+    // Debounce the network request by 500ms
+    avatarDebounceTimeout = setTimeout(() => {
+      // Fetch 2D face avatar from mc-heads.net API (falls back to Steve if not a premium account)
+      avatarPreview.style.backgroundImage = `url('https://mc-heads.net/avatar/${encodeURIComponent(name.trim())}/100')`;
+      avatarPreview.style.backgroundSize = 'cover';
+      avatarPreview.style.backgroundPosition = 'center';
+    }, 500);
+  } else {
+    if (avatarDebounceTimeout) clearTimeout(avatarDebounceTimeout);
+    avatarPreview.textContent = 'P';
+    avatarPreview.style.backgroundImage = '';
+  }
+}
+
+// Live update avatar as user types nickname
+if (settingsNickname) {
+  settingsNickname.addEventListener('input', (e) => {
+    updateUserAvatar(e.target.value);
+    if (usernameInput) usernameInput.value = e.target.value;
+  });
+}
+if (usernameInput) {
+  usernameInput.addEventListener('input', (e) => {
+    updateUserAvatar(e.target.value);
+    if (settingsNickname) settingsNickname.value = e.target.value;
+    settings.nickname = e.target.value;
+    window.api.saveSettings(settings);
+  });
 }
 
 function updateModeBadge(isMock) {
@@ -2233,6 +2418,40 @@ async function initApp() {
   initParticles();
   animate();
   
+  // Launcher Updater UI
+  const updateOverlay = document.getElementById('launcher-update-overlay');
+  const updateStatus = document.getElementById('launcher-update-status');
+  const updatePercent = document.getElementById('launcher-update-percentage');
+  const updateFill = document.getElementById('launcher-update-fill');
+
+  if (window.api.onAppUpdateState) {
+    window.api.onAppUpdateState((state) => {
+      if (state.status === 'checking') {
+        updateOverlay.classList.remove('hidden');
+        updateStatus.textContent = 'Checking for launcher updates...';
+      } else if (state.status === 'available') {
+        updateOverlay.classList.remove('hidden');
+        updateStatus.textContent = 'Downloading version ' + state.version + '...';
+      } else if (state.status === 'progress') {
+        updateOverlay.classList.remove('hidden');
+        updateFill.style.width = state.percent + '%';
+        updatePercent.textContent = Math.round(state.percent) + '%';
+        let speedStr = (state.bytesPerSecond / (1024 * 1024)).toFixed(1) + ' MB/s';
+        updateStatus.textContent = 'Downloading... ' + speedStr;
+      } else if (state.status === 'downloaded') {
+        updateOverlay.classList.remove('hidden');
+        updateStatus.textContent = 'Installing update... Restarting...';
+        updateFill.style.width = '100%';
+        updatePercent.textContent = '100%';
+        setTimeout(() => {
+          window.api.installAppUpdate();
+        }, 1000);
+      } else if (state.status === 'not-available' || state.status === 'error') {
+        updateOverlay.classList.add('hidden');
+      }
+    });
+  }
+
   // Load local client settings configuration
   await loadSettings();
 
