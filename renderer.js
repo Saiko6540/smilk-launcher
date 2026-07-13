@@ -2236,6 +2236,15 @@ async function initApp() {
   // Load local client settings configuration
   await loadSettings();
 
+  // Get and display app version
+  try {
+    const version = await window.api.getAppVersion();
+    const verEl = document.getElementById('app-version-display');
+    if (verEl) verEl.textContent = 'v' + version;
+  } catch (e) {
+    console.error('Failed to get version', e);
+  }
+
   // Sort modpacks based on last played initially
   sortModpacks();
 

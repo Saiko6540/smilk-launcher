@@ -353,6 +353,8 @@ ipcMain.on('console-window-close', () => {
   if (consoleWindow && !consoleWindow.isDestroyed()) consoleWindow.close();
 });
 
+ipcMain.handle('get-app-version', () => app.getVersion());
+
 
 // Check Updates IPC
 ipcMain.handle('check-updates', async (event, packKey) => {

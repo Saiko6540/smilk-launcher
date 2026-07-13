@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   restoreWindow: () => ipcRenderer.send('window-restore'),
   launcherHide: () => ipcRenderer.send('launcher-hide'),
   launcherShow: () => ipcRenderer.send('launcher-show'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
   
   // Event listeners
