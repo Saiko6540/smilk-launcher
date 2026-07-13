@@ -7,6 +7,9 @@ const winCloseBtn = document.getElementById('win-close');
 const packTitleEl = document.getElementById('pack-title');
 
 const packDescEl = document.getElementById('pack-description');
+const instanceOptionsMenu = document.getElementById('instance-options-menu');
+const optOpenFolder = document.getElementById('opt-open-folder');
+const optDeleteInstance = document.getElementById('opt-delete-instance');
 const statMcVerEl = document.getElementById('stat-mc-ver');
 const statLoaderEl = document.getElementById('stat-loader');
 const statLocalVerEl = document.getElementById('stat-local-ver');
@@ -52,8 +55,9 @@ const websiteBtn = document.getElementById('website-btn');
 const debugBtn = document.getElementById('debug-btn');
 
 // Active Launcher State
-let activePack = 'cobblemon';
-let activeTheme = 'theme-cobblemon';
+let activePack = null;
+let activeTheme = null;
+let globalServerActiveInstanceId = null;
 let launcherState = 'ready'; // ready, updating, launching, playing, error
 let configSettings = {};
 let hideTimeout = null;
@@ -1665,13 +1669,11 @@ async function checkServerStatus(instanceId) {
           });
         }
 
-        // Highlight server-active sidebar item
-        document.querySelectorAll('.modpack-item').forEach(item => {
-          item.classList.remove('server-active');
-        });
-        if (serverActiveInstance) {
-          const activeItem = document.querySelector(`.modpack-item[data-id="${serverActiveInstance.id}"]`);
-          if (activeItem) activeItem.classList.add('server-active');
+        // Highlight and sort server-active sidebar item
+        const newServerActiveId = serverActiveInstance ? serverActiveInstance.id : null;
+        if (newServerActiveId !== globalServerActiveInstanceId) {
+          globalServerActiveInstanceId = newServerActiveId;
+          renderInstancesList();
         }
 
         const serverActiveName = serverActiveInstance ? serverActiveInstance.name : 'Another Pack';
@@ -1712,6 +1714,7 @@ async function checkServerStatus(instanceId) {
 
 // Fetch update status from main process
 async function updateVersionCheck() {
+  if (!activePack) return;
   try {
     const info = await window.api.checkUpdates(activePack);
     if (info.localVersion === 'none') {
@@ -1935,6 +1938,7 @@ playBtn.addEventListener('click', async () => {
   launcherState = 'updating';
   playBtn.disabled = true;
   progressContainer.classList.remove('hidden');
+  progressStatus.textContent = 'Starting...';
   progressFill.style.width = '0%';
   progressPercentage.textContent = '0%';
 
@@ -1978,6 +1982,8 @@ window.api.onUpdateStatus((data) => {
   console.log('Update progress status:', data);
   if (data.status === 'checking') {
     progressStatus.textContent = data.message;
+    progressStatus.style.color = '';
+    progressFill.style.background = '';
   } else if (data.status === 'downloading_pack' || data.status === 'downloading_mods') {
     progressStatus.textContent = data.message;
     progressFill.style.width = `${data.progress}%`;
@@ -1986,6 +1992,13 @@ window.api.onUpdateStatus((data) => {
     progressStatus.textContent = data.message;
     progressFill.style.width = '100%';
     progressPercentage.textContent = '100%';
+  } else if (data.status === 'error') {
+    progressStatus.textContent = 'Error: ' + data.message;
+    progressStatus.style.color = '#ff4c4c';
+    progressFill.style.background = '#ff4c4c';
+    playBtn.disabled = false;
+    launcherState = 'error';
+    btnText.textContent = 'RETRY';
   } else if (data.status === 'ready') {
     progressStatus.textContent = 'Modpack updated!';
     progressFill.style.width = '100%';
@@ -2178,12 +2191,22 @@ function renderInstancesList() {
   instancesList.innerHTML = '';
   if (!configSettings.instances || configSettings.instances.length === 0) {
     instancesList.innerHTML = '<div style="padding: 20px; color: rgba(255,255,255,0.5); font-size: 0.9rem; text-align: center;">No packs installed. Click + to add one.</div>';
+    document.querySelector('.pack-display').style.display = 'none';
+    const actionWidget = document.querySelector('.action-widget');
+    if (actionWidget) actionWidget.style.display = 'flex';
+    playBtn.disabled = true;
+    btnText.textContent = 'PLAY';
+    startBackgroundCycle();
     return;
   }
 
-  // Sort instances (Priority: Server MOTD matching, then last played)
+  // Sort instances (Priority: Server active, then last played)
   const sorted = [...configSettings.instances].sort((a, b) => {
-    // We could add MOTD sorting logic here later
+    const aIsServerActive = a.id === globalServerActiveInstanceId;
+    const bIsServerActive = b.id === globalServerActiveInstanceId;
+    if (aIsServerActive && !bIsServerActive) return -1;
+    if (!aIsServerActive && bIsServerActive) return 1;
+
     const timeA = parseInt(localStorage.getItem('lastPlayed_' + a.id) || '0', 10);
     const timeB = parseInt(localStorage.getItem('lastPlayed_' + b.id) || '0', 10);
     return timeB - timeA;
@@ -2191,20 +2214,55 @@ function renderInstancesList() {
 
   sorted.forEach(instance => {
     const el = document.createElement('div');
-    el.className = `modpack-item ${activeInstanceId === instance.id ? 'active' : ''}`;
+    el.className = `modpack-item ${activeInstanceId === instance.id ? 'active' : ''} ${globalServerActiveInstanceId === instance.id ? 'server-active' : ''}`;
     el.dataset.id = instance.id;
     
+    const repoOwner = 'ddidif';
+    const repoName = 'submarinemilkkk';
+    const iconUrl = instance.iconUrl || `https://github.com/${repoOwner}/${repoName}/raw/${instance.branch}/icon.png`;
+
+    if (instance.bannerUrl) {
+      el.style.backgroundImage = `linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.5) 100%), url('${instance.bannerUrl}')`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+    }
+
     el.innerHTML = `
-      <div class="modpack-icon">📦</div>
+      <div class="modpack-icon" style="background-image: url('${iconUrl}'); background-size: contain; background-repeat: no-repeat; background-position: center; color: transparent;">📦</div>
       <div class="modpack-info">
         <span class="modpack-name">${instance.name}</span>
         <span class="modpack-meta">${instance.versionType || 'Default'}</span>
       </div>
+      <button class="instance-context-btn" data-id="${instance.id}" style="background: transparent; border: none; color: rgba(255,255,255,0.5); font-size: 1.2rem; cursor: pointer; padding: 0 5px;">⋮</button>
     `;
     
-    el.addEventListener('click', () => switchInstance(instance.id));
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.instance-context-btn')) return; // handled below
+      switchInstance(instance.id);
+    });
+
+    const contextBtn = el.querySelector('.instance-context-btn');
+    if (contextBtn) {
+      contextBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        contextMenuTargetId = instance.id; // temporary select for context menu actions
+        
+        const rect = contextBtn.getBoundingClientRect();
+        instanceOptionsMenu.style.top = `${rect.bottom + 5}px`;
+        instanceOptionsMenu.style.left = `${rect.left}px`;
+        instanceOptionsMenu.classList.remove('hidden');
+      });
+    }
+
     instancesList.appendChild(el);
   });
+
+  if (sorted.length > 0) {
+    const activeExists = sorted.some(i => i.id === activePack);
+    if (!activeExists) {
+      switchInstance(sorted[0].id);
+    }
+  }
 }
 
 // Switch the active instance in the dashboard
@@ -2235,10 +2293,22 @@ function switchInstance(instanceId) {
 
   // CSS Theme Fallback
   document.body.className = ''; // Reset themes
-  if (instance.branch === 'stranded_at_sea') document.body.classList.add('theme-stranded');
-  else if (instance.branch === 'democky_edition') document.body.classList.add('theme-democky');
-  else if (instance.branch === 'cobblemon') document.body.classList.add('theme-cobblemon');
-  else if (instance.branch === 'vanilla_plus') document.body.classList.add('theme-vanilla');
+  const branchLower = (instance.branch || '').toLowerCase();
+  
+  if (branchLower.includes('sea') || branchLower.includes('stranded')) {
+    document.body.classList.add('theme-stranded');
+    activeTheme = 'theme-stranded';
+  } else if (branchLower.includes('democky') || branchLower.includes('create') || branchLower.includes('plus')) {
+    document.body.classList.add('theme-democky');
+    activeTheme = 'theme-democky';
+  } else if (branchLower.includes('cobble') || branchLower.includes('pokemon')) {
+    document.body.classList.add('theme-cobblemon');
+    activeTheme = 'theme-cobblemon';
+  } else if (branchLower.includes('vanilla')) {
+    document.body.classList.add('theme-vanilla');
+    activeTheme = 'theme-vanilla';
+  }
+  initParticles();
 
   // Dynamic Background
   if (instance.backgroundUrl) {
@@ -2255,6 +2325,47 @@ function switchInstance(instanceId) {
   if (versionCheckInterval) clearInterval(versionCheckInterval);
   versionCheckInterval = setInterval(updateVersionCheck, 2000);
 }
+
+// Instance Options Menu Logic
+document.addEventListener('click', (e) => {
+  if (!instanceOptionsMenu.contains(e.target) && !e.target.closest('.instance-context-btn')) {
+    instanceOptionsMenu.classList.add('hidden');
+  }
+});
+
+let contextMenuTargetId = null;
+
+optOpenFolder.addEventListener('click', () => {
+  instanceOptionsMenu.classList.add('hidden');
+  if (contextMenuTargetId) {
+    window.api.openInstanceDir(contextMenuTargetId);
+  }
+});
+
+optDeleteInstance.addEventListener('click', async () => {
+  instanceOptionsMenu.classList.add('hidden');
+  if (contextMenuTargetId) {
+    if (confirm('Are you sure you want to delete this instance? This cannot be undone.')) {
+      const instanceToDelete = contextMenuTargetId;
+      
+      // We don't need to manually update configSettings or renderInstancesList here.
+      // main.js broadcasts 'settings-updated' when an instance is deleted,
+      // which will automatically update configSettings and call renderInstancesList().
+      await window.api.deleteInstance(instanceToDelete);
+      
+      if (activePack === instanceToDelete) {
+        if (versionCheckInterval) {
+          clearInterval(versionCheckInterval);
+          versionCheckInterval = null;
+        }
+        activePack = null;
+        activeInstanceId = null;
+        // The pack display will either be hidden by renderInstancesList (if empty)
+        // or overwritten by the next available instance.
+      }
+    }
+  }
+});
 
 // Global server status interval
 let serverStatusInterval = null;
@@ -2274,12 +2385,49 @@ newInstanceBtn.addEventListener('click', async () => {
       return;
     }
 
+    let activeServerBranch = null;
+    try {
+      const serverIp = '185.206.149.27:25601';
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const serverRes = await fetch(`https://api.mcstatus.io/v2/status/java/${serverIp}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      const serverData = await serverRes.json();
+      if (serverData.online) {
+        const motd = serverData.motd?.clean?.trim() || "";
+        const digitToBranch = {
+          '0': 'vanilla+',
+          '1': 'sea',
+          '2': 'createplus',
+          '3': 'cobblemon'
+        };
+        for (const [digit, branchName] of Object.entries(digitToBranch)) {
+          if (motd === digit || motd.startsWith(`${digit} `) || motd.startsWith(`[${digit}]`)) {
+            activeServerBranch = branchName;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to get live server branch for store tags:', e);
+    }
+
+    if (activeServerBranch) {
+      catalog.sort((a, b) => {
+        if (a.branch === activeServerBranch && b.branch !== activeServerBranch) return -1;
+        if (a.branch !== activeServerBranch && b.branch === activeServerBranch) return 1;
+        return 0;
+      });
+    }
+
     catalog.forEach(pack => {
       const el = document.createElement('div');
       el.className = 'store-item';
       
+      const isCurrentlyOnServer = activeServerBranch && pack.branch === activeServerBranch;
+      const serverStatusTag = isCurrentlyOnServer ? `<span class="store-tag server">● On Server</span>` : '';
+      
       const tagsHtml = pack.tags.map(t => {
-        if (t.toLowerCase() === 'currently on server') return `<span class="store-tag server">● On Server</span>`;
         return `<span class="store-tag">${t}</span>`;
       }).join('');
 
@@ -2295,31 +2443,43 @@ newInstanceBtn.addEventListener('click', async () => {
         versionOptionsHtml = `<span style="font-size:0.8rem; color:red;">No .mrpack found</span>`;
       }
 
+      const isInstalled = configSettings.instances && configSettings.instances.some(i => i.branch === pack.branch);
+      let btnHtml = '';
+      if (isInstalled) {
+        btnHtml = `<button class="store-install-btn" disabled style="background-color: #555; color: rgba(255,255,255,0.5); cursor: not-allowed;">Installed</button>`;
+      } else {
+        btnHtml = `<button class="store-install-btn" ${pack.mrpacks.length === 0 ? 'disabled' : ''}>Install</button>`;
+      }
+
       el.innerHTML = `
         <div class="store-item-banner" style="background-image: url('${pack.bannerUrl}')"></div>
         <div class="store-item-content">
           <div class="store-item-title">${pack.title}</div>
-          <div class="store-item-tags">${tagsHtml}</div>
+          <div class="store-item-tags">${serverStatusTag}${tagsHtml}</div>
           <div class="store-item-desc">${pack.description}</div>
           <div class="store-item-footer">
             ${versionOptionsHtml}
-            <button class="store-install-btn" ${pack.mrpacks.length === 0 ? 'disabled' : ''}>Install</button>
+            ${btnHtml}
           </div>
         </div>
       `;
       
-      const installBtn = el.querySelector('.store-install-btn');
-      if (installBtn) {
-        installBtn.addEventListener('click', () => {
-          const select = el.querySelector('.store-version-select');
-          const mrpackUrl = select ? select.value : pack.mrpacks[0];
-          const versionType = select ? select.options[select.selectedIndex].text : 'Default';
-          installNewInstance(pack, mrpackUrl, versionType);
-        });
+      if (!isInstalled) {
+        const installBtn = el.querySelector('.store-install-btn');
+        if (installBtn) {
+          installBtn.addEventListener('click', () => {
+            const select = el.querySelector('.store-version-select');
+            const mrpackUrl = select ? select.value : pack.mrpacks[0];
+            const versionType = select ? select.options[select.selectedIndex].text : 'Default';
+            installNewInstance(pack, mrpackUrl, versionType);
+          });
+        }
       }
 
       storeGrid.appendChild(el);
     });
+
+
 
   } catch (err) {
     storeGrid.innerHTML = `<div class="store-loading" style="color:red;">Error loading store: ${err.message}</div>`;
@@ -2331,9 +2491,16 @@ storeModalClose.addEventListener('click', () => {
 });
 
 async function installNewInstance(packData, mrpackPath, versionType) {
+  if (configSettings.instances && configSettings.instances.some(i => i.branch === packData.branch)) {
+    return;
+  }
+  
   storeModal.classList.add('hidden');
   
   const instanceId = packData.branch + '_' + Date.now();
+  
+  const repoOwner = 'ddidif';
+  const repoName = 'submarinemilkkk';
   
   if (!configSettings.instances) configSettings.instances = [];
   configSettings.instances.push({
@@ -2343,12 +2510,14 @@ async function installNewInstance(packData, mrpackPath, versionType) {
     mrpackPath: mrpackPath,
     versionType: versionType,
     description: packData.description,
+    iconUrl: packData.iconUrl || `https://github.com/${repoOwner}/${repoName}/raw/${packData.branch}/icon.png`,
+    bannerUrl: packData.bannerUrl,
     backgroundUrl: packData.backgroundUrl,
     mcVersion: 'Downloading...',
     loader: 'Downloading...'
   });
   
-  saveSettingsData();
+  await saveSettingsData();
   renderInstancesList();
   switchInstance(instanceId);
   
@@ -2358,7 +2527,33 @@ async function installNewInstance(packData, mrpackPath, versionType) {
   launcherState = 'updating';
   playBtn.disabled = true;
   progressContainer.classList.remove('hidden');
-  window.api.startUpdate(instanceId);
+  progressStatus.textContent = 'Checking for updates...';
+  progressFill.style.width = '0%';
+  progressPercentage.textContent = '0%';
+  
+  try {
+    const res = await window.api.startUpdate(instanceId);
+    if (!res.success) {
+      throw new Error(res.error);
+    }
+    launcherState = 'ready';
+    playBtn.disabled = false;
+    btnText.textContent = 'PLAY';
+    
+    // Hide progress bar after 2 seconds
+    setTimeout(() => {
+      if (launcherState === 'ready') {
+        progressContainer.classList.add('hidden');
+      }
+    }, 2000);
+  } catch (err) {
+    launcherState = 'error';
+    playBtn.disabled = false;
+    btnText.textContent = 'RETRY';
+    progressStatus.textContent = 'Error: ' + err.message;
+    progressStatus.style.color = '#ff4c4c';
+    progressFill.style.background = '#ff4c4c';
+  }
 }
 
 let backgroundCycleInterval = null;
@@ -2367,12 +2562,19 @@ const fallbackThemes = ['theme-stranded', 'theme-democky', 'theme-cobblemon', 't
 function startBackgroundCycle() {
   if (backgroundCycleInterval) return;
   let themeIndex = 0;
-  // Set initial theme
-  document.body.className = fallbackThemes[themeIndex];
+  
+  const applyTheme = () => {
+    const theme = fallbackThemes[themeIndex];
+    document.body.className = theme;
+    activeTheme = theme;
+    initParticles();
+  };
+  
+  applyTheme();
   
   backgroundCycleInterval = setInterval(() => {
     themeIndex = (themeIndex + 1) % fallbackThemes.length;
-    document.body.className = fallbackThemes[themeIndex];
+    applyTheme();
   }, 5000); // Change every 5 seconds
 }
 
@@ -2399,7 +2601,9 @@ async function initApp() {
   } else {
     document.querySelector('.pack-display').style.display = 'none';
     const actionWidget = document.querySelector('.action-widget');
-    if (actionWidget) actionWidget.style.display = 'none';
+    if (actionWidget) actionWidget.style.display = 'flex';
+    playBtn.disabled = true;
+    btnText.textContent = 'PLAY';
     
     // Start cycling backgrounds when empty
     startBackgroundCycle();

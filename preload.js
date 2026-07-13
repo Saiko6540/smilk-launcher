@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('api', {
   openDiscord: () => ipcRenderer.send('open-discord'),
   openConsoleWindow: () => ipcRenderer.send('open-console-window'),
   openInstancesDir: () => ipcRenderer.send('open-instances-dir'),
+  openInstanceDir: (instanceId) => ipcRenderer.send('open-instance-dir', instanceId),
+  deleteInstance: (instanceId) => ipcRenderer.invoke('delete-instance', instanceId),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   maximizeWindow: () => ipcRenderer.send('window-maximize'),
   closeWindow: () => ipcRenderer.send('window-close'),

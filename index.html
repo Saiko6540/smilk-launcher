@@ -59,9 +59,9 @@
       </div>
 
       <!-- Modpack Info Card -->
-      <section class="pack-display">
+      <section class="pack-display" style="display: none;">
         <div class="pack-badge">SELECTED MODPACK</div>
-        <h1 id="pack-title" class="pack-title">Cobblemon</h1>
+        <h1 id="pack-title" class="pack-title"></h1>
         <p id="pack-description" class="pack-description">
           Catch them all in Minecraft! A fully integrated Pokemon experience, with high quality animations, custom battles, and modern style.
         </p>
@@ -291,6 +291,11 @@
         <button id="crash-upload-btn" class="save-btn" style="background: linear-gradient(135deg, #ffa502 0%, #ff7f50 100%); border: none;">Upload Log to Web</button>
       </div>
     </div>
+  </div>
+
+  <div id="instance-options-menu" class="context-menu hidden" style="position: fixed; z-index: 1000;">
+    <div class="context-menu-item" id="opt-open-folder">Open Folder</div>
+    <div class="context-menu-item delete" id="opt-delete-instance">Delete Instance</div>
   </div>
 
   <script src="renderer.js"></script>

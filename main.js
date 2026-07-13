@@ -227,12 +227,34 @@ ipcMain.handle('reset-settings', () => {
 });
 
 // Clear Instances IPC
+ipcMain.handle('delete-instance', async (event, instanceId) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
+    if (fs.existsSync(instanceDir)) {
+      fs.rmSync(instanceDir, { recursive: true, force: true });
+    }
+    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
+    if (settings.instances) {
+      settings.instances = settings.instances.filter(i => i.id !== instanceId);
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      if (mainWindow) mainWindow.webContents.send('settings-updated', settings);
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle('clear-instances', () => {
   try {
     const instancesDir = path.join(userDataPath, 'game_data', 'instances');
     if (fs.existsSync(instancesDir)) {
       fs.rmSync(instancesDir, { recursive: true, force: true });
     }
+    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
+    settings.instances = [];
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    if (mainWindow) mainWindow.webContents.send('settings-updated', settings);
     return { success: true };
   } catch (e) {
     return { success: false, error: e.message };
@@ -274,24 +296,19 @@ ipcMain.on('open-instances-dir', () => {
   shell.openPath(instancesDir);
 });
 
-// Window controls IPC
-ipcMain.on('window-minimize', () => {
-  if (mainWindow) mainWindow.minimize();
-});
-
-ipcMain.on('window-maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
+// Open specific instance directory
+ipcMain.on('open-instance-dir', (event, instanceId) => {
+  const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
+  if (fs.existsSync(instanceDir)) {
+    shell.openPath(instanceDir);
+  } else {
+    // If it doesn't exist, open the parent instances directory
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+    shell.openPath(instancesDir);
   }
 });
 
-ipcMain.on('window-close', () => {
-  if (mainWindow) mainWindow.close();
-});
+
 
 // Console window controls
 ipcMain.on('open-console-window', () => {
@@ -314,7 +331,9 @@ ipcMain.handle('check-updates', async (event, instanceId) => {
   const localVersionFile = path.join(instanceDir, 'local_version.json');
 
   const instance = settings.instances ? settings.instances.find(i => i.id === instanceId) : null;
-  if (!instance) throw new Error('Unknown instance');
+  if (!instance) {
+    return { localVersion: 'none', error: 'Unknown instance' };
+  }
 
   let localVersion = 'none';
   let commitMessage = null;
@@ -353,7 +372,7 @@ ipcMain.handle('start-update', async (event, instanceId) => {
     // Generate configUrl pointing to the selected mrpack on the branch
     const repoOwner = 'ddidif';
     const repoName = 'submarinemilkkk';
-    const configUrl = `https://github.com/${repoOwner}/${repoName}/tree/${instance.branch}/${instance.mrpackPath}`;
+    const configUrl = `https://github.com/${repoOwner}/${repoName}/raw/${instance.branch}/${encodeURIComponent(instance.mrpackPath)}`;
     
     await checkAndInstallUpdate(instanceId, configUrl, instanceDir, sendProgress);
     
@@ -629,73 +648,60 @@ ipcMain.handle('upload-log', async (event, instanceDir) => {
     req.end();
   });
 });
-// Get GitHub Store Catalog
 ipcMain.handle('get-github-catalog', async () => {
   const repoOwner = 'ddidif';
   const repoName = 'submarinemilkkk';
-  const apiBase = `https://api.github.com/repos/${repoOwner}/${repoName}`;
-  const headers = { 'User-Agent': 'smilk-launcher' };
+  const cachePath = path.join(userDataPath, 'catalog_cache.json');
 
   try {
     const fetch = require('node-fetch'); // Electron has fetch natively or we can use https, but Node 20+ has fetch built-in
   } catch (e) {}
 
-  // Fetch all branches (each branch is a modpack version/variant)
-  const branchesRes = await fetch(`${apiBase}/branches?timestamp=${Date.now()}`, { headers });
-  if (!branchesRes.ok) throw new Error('Failed to fetch catalog branches');
-  const branches = await branchesRes.json();
+  let catalog = [];
+  try {
+    const fetchHeaders = {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache'
+    };
+    // Fetch catalog.json directly from raw.githubusercontent.com (No Rate Limits!)
+    const catalogUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/catalog.json`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(catalogUrl + `?timestamp=${Date.now()}`, { headers: fetchHeaders, signal: controller.signal });
+    if (!res.ok) {
+      // Try master branch as fallback
+      const fallbackUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/master/catalog.json`;
+      const fallbackRes = await fetch(fallbackUrl + `?timestamp=${Date.now()}`, { headers: fetchHeaders, signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (!fallbackRes.ok) throw new Error('Failed to fetch catalog.json from main or master branch');
 
-  const catalog = [];
-  for (const branch of branches) {
-    if (branch.name === 'main' || branch.name === 'master') continue; // Ignore main branches
-
-    const treeRes = await fetch(`${apiBase}/git/trees/${branch.commit.sha}?recursive=1`, { headers });
-    if (!treeRes.ok) continue;
-    const treeData = await treeRes.json();
-    const files = treeData.tree || [];
-
-    // Find resources
-    const hasBanner = files.some(f => f.path.startsWith('banner.'));
-    const hasBackground = files.some(f => f.path.startsWith('background.'));
-    const mrpacks = files.filter(f => f.path.endsWith('.mrpack')).map(f => f.path);
-    
-    // Read README
-    let title = branch.name;
-    let description = '';
-    let tags = [];
-    
-    const readmeFile = files.find(f => f.path.toLowerCase() === 'readme.md');
-    if (readmeFile) {
-      const readmeRes = await fetch(`https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch.name}/${readmeFile.path}`);
-      if (readmeRes.ok) {
-        const readmeText = await readmeRes.text();
-        const lines = readmeText.split('\n').map(l => l.trim());
-        if (lines.length > 0) {
-          title = lines[0].replace(/^(#+\s*|title:\s*)/i, '');
-          
-          const tagLineIndex = lines.findIndex(l => l.toLowerCase().startsWith('tags:'));
-          if (tagLineIndex !== -1) {
-            tags = lines[tagLineIndex].substring(5).split(',').map(t => t.trim());
-          }
-
-          // Description is everything after first 2-3 lines
-          const descStart = tagLineIndex !== -1 ? tagLineIndex + 1 : 1;
-          description = lines.slice(descStart).join('\n').trim();
-          description = description.replace(/^description:\s*/i, '');
-        }
-      }
+      catalog = await fallbackRes.json();
+    } else {
+      clearTimeout(timeoutId);
+      catalog = await res.json();
     }
 
-    catalog.push({
-      branch: branch.name,
-      title,
-      description,
-      tags,
-      mrpacks,
-      bannerUrl: hasBanner ? `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch.name}/banner.png` : null, // Simplification, can be improved to handle .gif
-      backgroundUrl: hasBackground ? `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${branch.name}/background.png` : null
-    });
+    // Write to cache
+    fs.writeFileSync(cachePath, JSON.stringify(catalog, null, 2), 'utf8');
+  } catch (err) {
+    console.error('GitHub Catalog Fetch failed, checking cache:', err);
+    if (fs.existsSync(cachePath)) {
+      try {
+        catalog = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      } catch (cacheErr) {
+        console.error('Failed to read catalog cache:', cacheErr);
+        throw err;
+      }
+    } else {
+      throw err;
+    }
   }
 
+  try {
+    const debugPath = path.join(userDataPath, 'catalog_debug.log');
+    fs.writeFileSync(debugPath, JSON.stringify(catalog, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Debug log write failed:', e);
+  }
   return catalog;
 });
