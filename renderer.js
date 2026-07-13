@@ -2241,6 +2241,9 @@ async function initApp() {
     const version = await window.api.getAppVersion();
     const verEl = document.getElementById('app-version-display');
     if (verEl) verEl.textContent = 'v' + version;
+    
+    const launcherVerEl = document.getElementById('launcher-version-display');
+    if (launcherVerEl) launcherVerEl.textContent = 'Launcher v' + version;
   } catch (e) {
     console.error('Failed to get version', e);
   }
