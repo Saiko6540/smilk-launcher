@@ -84,6 +84,23 @@ const shadersDropzone = document.getElementById('shaders-dropzone');
 const shadersDropzoneStatus = document.getElementById('shaders-dropzone-status');
 const installedShadersContainer = document.getElementById('installed-shaders-container');
 const installedShadersList = document.getElementById('installed-shaders-list');
+const tabBtnAddons = document.getElementById('tab-btn-addons');
+const tabBtnOptions = document.getElementById('tab-btn-options');
+const tabPanelAddons = document.getElementById('tab-panel-addons');
+const tabPanelOptions = document.getElementById('tab-panel-options');
+const optRender = document.getElementById('opt-render');
+const optRenderVal = document.getElementById('opt-render-val');
+const optFov = document.getElementById('opt-fov');
+const optFovVal = document.getElementById('opt-fov-val');
+const optSensitivity = document.getElementById('opt-sensitivity');
+const optSensitivityVal = document.getElementById('opt-sensitivity-val');
+const optMaster = document.getElementById('opt-master');
+const optMasterVal = document.getElementById('opt-master-val');
+const optMusic = document.getElementById('opt-music');
+const optMusicVal = document.getElementById('opt-music-val');
+const optVsync = document.getElementById('opt-vsync');
+const optFullscreen = document.getElementById('opt-fullscreen');
+const resourcepacksList = document.getElementById('resourcepacks-list');
 const packSettingsSave = document.getElementById('pack-settings-save');
 
 // Website & Debug Buttons
@@ -2184,6 +2201,9 @@ function openPackSettings(packKey) {
     if (installedShadersContainer) installedShadersContainer.style.display = 'none';
   }
 
+  // Switch to addons tab initially
+  switchSettingsTab('addons');
+
   if (packSettingsModal) {
     packSettingsModal.classList.remove('hidden');
   }
@@ -2423,6 +2443,185 @@ async function loadInstalledShaders(packKey) {
   });
 }
 
+async function loadGameOptions(packKey) {
+  if (!resourcepacksList) return;
+  resourcepacksList.innerHTML = '<div style="color: rgba(255,255,255,0.4); font-size: 10px; text-align: center; padding: 10px 0; width: 100%;">Loading game options...</div>';
+
+  const res = await window.api.readGameOptions(packKey);
+  if (!res || !res.success) {
+    resourcepacksList.innerHTML = '<div style="color: #ff4757; font-size: 10px; text-align: center; padding: 10px 0; width: 100%;">Failed to load options.txt</div>';
+    return;
+  }
+
+  const { options, availableResourcePacks } = res;
+
+  if (optRender) {
+    optRender.value = options.renderDistance;
+    if (optRenderVal) optRenderVal.textContent = `${options.renderDistance} chunks`;
+  }
+  if (optFov) {
+    const fovVal = Math.round(options.fov * 40 + 70);
+    optFov.value = fovVal;
+    if (optFovVal) {
+      if (fovVal === 70) optFovVal.textContent = '70 (Normal)';
+      else if (fovVal === 110) optFovVal.textContent = '110 (Quake Pro)';
+      else optFovVal.textContent = fovVal;
+    }
+  }
+  if (optSensitivity) {
+    const sensVal = Math.round(options.mouseSensitivity * 200);
+    optSensitivity.value = sensVal;
+    if (optSensitivityVal) {
+      if (sensVal === 100) optSensitivityVal.textContent = '100% (Normal)';
+      else if (sensVal === 200) optSensitivityVal.textContent = '200% (HyperSpeed)';
+      else if (sensVal === 0) optSensitivityVal.textContent = '0% (Yawn)';
+      else optSensitivityVal.textContent = `${sensVal}%`;
+    }
+  }
+  if (optMaster) {
+    const masterVal = Math.round(options.soundCategory_master * 100);
+    optMaster.value = masterVal;
+    if (optMasterVal) optMasterVal.textContent = `${masterVal}%`;
+  }
+  if (optMusic) {
+    const musicVal = Math.round(options.soundCategory_music * 100);
+    optMusic.value = musicVal;
+    if (optMusicVal) optMusicVal.textContent = `${musicVal}%`;
+  }
+  if (optVsync) {
+    optVsync.checked = options.enableVsync;
+  }
+  if (optFullscreen) {
+    optFullscreen.checked = options.fullscreen;
+  }
+
+  if (availableResourcePacks.length === 0) {
+    resourcepacksList.innerHTML = '<div style="color: rgba(255,255,255,0.3); font-size: 10px; text-align: center; padding: 15px 0; width: 100%;">No resource packs found in folder.</div>';
+    return;
+  }
+
+  resourcepacksList.innerHTML = '';
+  const activePacks = options.resourcePacks || [];
+
+  availableResourcePacks.forEach(packName => {
+    const item = document.createElement('div');
+    item.style.display = 'flex';
+    item.style.alignItems = 'center';
+    item.style.justifyContent = 'space-between';
+    item.style.background = 'rgba(255, 255, 255, 0.02)';
+    item.style.border = '1px solid rgba(255, 255, 255, 0.05)';
+    item.style.borderRadius = '6px';
+    item.style.padding = '6px 10px';
+    item.style.fontSize = '10px';
+    item.style.color = '#fff';
+    item.style.width = '100%';
+    item.style.boxSizing = 'border-box';
+    item.style.gap = '10px';
+
+    const label = document.createElement('span');
+    label.textContent = packName;
+    label.style.overflow = 'hidden';
+    label.style.textOverflow = 'ellipsis';
+    label.style.whiteSpace = 'nowrap';
+    label.style.flex = '1';
+    label.title = packName;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.style.accentColor = 'var(--primary)';
+    checkbox.style.cursor = 'pointer';
+    
+    const fileRef = `file/${packName}`;
+    const isActive = activePacks.includes(fileRef) || activePacks.includes(packName);
+    checkbox.checked = isActive;
+
+    item.appendChild(label);
+    item.appendChild(checkbox);
+    resourcepacksList.appendChild(item);
+
+    item.dataset.packRef = fileRef;
+    item.dataset.packName = packName;
+  });
+}
+
+function switchSettingsTab(tabName) {
+  if (tabName === 'addons') {
+    if (tabBtnAddons) {
+      tabBtnAddons.classList.add('active');
+      tabBtnAddons.style.color = '#fff';
+      tabBtnAddons.style.borderBottomColor = 'var(--primary)';
+    }
+    if (tabBtnOptions) {
+      tabBtnOptions.classList.remove('active');
+      tabBtnOptions.style.color = 'rgba(255,255,255,0.4)';
+      tabBtnOptions.style.borderBottomColor = 'transparent';
+    }
+    if (tabPanelAddons) tabPanelAddons.style.display = 'flex';
+    if (tabPanelOptions) tabPanelOptions.style.display = 'none';
+  } else {
+    if (tabBtnOptions) {
+      tabBtnOptions.classList.add('active');
+      tabBtnOptions.style.color = '#fff';
+      tabBtnOptions.style.borderBottomColor = 'var(--primary)';
+    }
+    if (tabBtnAddons) {
+      tabBtnAddons.classList.remove('active');
+      tabBtnAddons.style.color = 'rgba(255,255,255,0.4)';
+      tabBtnAddons.style.borderBottomColor = 'transparent';
+    }
+    if (tabPanelAddons) tabPanelAddons.style.display = 'none';
+    if (tabPanelOptions) tabPanelOptions.style.display = 'flex';
+    
+    if (editingPackSettings) {
+      loadGameOptions(editingPackSettings);
+    }
+  }
+}
+
+if (tabBtnAddons) {
+  tabBtnAddons.addEventListener('click', () => switchSettingsTab('addons'));
+}
+if (tabBtnOptions) {
+  tabBtnOptions.addEventListener('click', () => switchSettingsTab('options'));
+}
+
+if (optRender) {
+  optRender.addEventListener('input', (e) => {
+    if (optRenderVal) optRenderVal.textContent = `${e.target.value} chunks`;
+  });
+}
+if (optFov) {
+  optFov.addEventListener('input', (e) => {
+    if (optFovVal) {
+      const val = parseInt(e.target.value, 10);
+      if (val === 70) optFovVal.textContent = '70 (Normal)';
+      else if (val === 110) optFovVal.textContent = '110 (Quake Pro)';
+      else optFovVal.textContent = val;
+    }
+  });
+}
+if (optSensitivity) {
+  optSensitivity.addEventListener('input', (e) => {
+    if (optSensitivityVal) {
+      const val = parseInt(e.target.value, 10);
+      if (val === 100) optSensitivityVal.textContent = '100% (Normal)';
+      else if (val === 200) optSensitivityVal.textContent = '200% (HyperSpeed)';
+      else if (val === 0) optSensitivityVal.textContent = '0% (Yawn)';
+      else optSensitivityVal.textContent = `${val}%`;
+    }
+  });
+}
+if (optMaster) {
+  optMaster.addEventListener('input', (e) => {
+    if (optMasterVal) optMasterVal.textContent = `${e.target.value}%`;
+  });
+}
+if (optMusic) {
+  optMusic.addEventListener('input', (e) => {
+    if (optMusicVal) optMusicVal.textContent = `${e.target.value}%`;
+  });
+}
+
 if (packSettingsSave) {
   packSettingsSave.addEventListener('click', async () => {
     if (editingPackSettings) {
@@ -2444,6 +2643,32 @@ if (packSettingsSave) {
       const res = await window.api.saveSettings(settings);
       if (res.success) {
         configSettings = settings;
+
+        // Save options.txt parameters
+        if (optRender && optFov && optSensitivity && optMaster && optMusic && optVsync && optFullscreen) {
+          const activePacks = ['vanilla'];
+          const packItems = document.querySelectorAll('#resourcepacks-list > div');
+          packItems.forEach(item => {
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            if (checkbox && checkbox.checked) {
+              activePacks.push(item.dataset.packRef);
+            }
+          });
+
+          const optionsObj = {
+            renderDistance: parseInt(optRender.value, 10),
+            fov: (parseInt(optFov.value, 10) - 70) / 40,
+            mouseSensitivity: parseFloat(optSensitivity.value) / 200,
+            soundCategory_master: parseFloat(optMaster.value) / 100,
+            soundCategory_music: parseFloat(optMusic.value) / 100,
+            enableVsync: optVsync.checked,
+            fullscreen: optFullscreen.checked,
+            resourcePacks: activePacks
+          };
+
+          await window.api.saveGameOptions(editingPackSettings, optionsObj);
+        }
+
         if (packSettingsModal) packSettingsModal.classList.add('hidden');
         if (shadersHelpPanel) shadersHelpPanel.style.display = 'none';
         if (shadersDropzoneStatus) shadersDropzoneStatus.style.display = 'none';

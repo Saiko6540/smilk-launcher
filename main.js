@@ -433,6 +433,145 @@ ipcMain.handle('delete-shaderpack', async (event, packKey, filename) => {
   }
 });
 
+ipcMain.handle('read-game-options', async (event, packKey) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const optionsPath = path.join(instanceDir, 'options.txt');
+    const resourcepacksDir = path.join(instanceDir, 'resourcepacks');
+
+    const availableResourcePacks = [];
+    if (fs.existsSync(resourcepacksDir)) {
+      const files = fs.readdirSync(resourcepacksDir);
+      for (const file of files) {
+        const fullPath = path.join(resourcepacksDir, file);
+        if (file.endsWith('.zip') || fs.statSync(fullPath).isDirectory()) {
+          availableResourcePacks.push(file);
+        }
+      }
+    }
+
+    const options = {
+      renderDistance: 12,
+      enableVsync: true,
+      fov: 0.0,
+      mouseSensitivity: 0.5,
+      soundCategory_master: 1.0,
+      soundCategory_music: 1.0,
+      fullscreen: false,
+      resourcePacks: []
+    };
+
+    if (fs.existsSync(optionsPath)) {
+      const content = fs.readFileSync(optionsPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const part = line.trim();
+        if (!part || part.startsWith('#')) continue;
+        const index = part.indexOf(':');
+        if (index === -1) continue;
+        
+        const key = part.substring(0, index).trim();
+        const val = part.substring(index + 1).trim();
+
+        if (key === 'renderDistance') {
+          options.renderDistance = parseInt(val, 10) || 12;
+        } else if (key === 'enableVsync') {
+          options.enableVsync = val === 'true';
+        } else if (key === 'fov') {
+          options.fov = parseFloat(val) || 0.0;
+        } else if (key === 'mouseSensitivity') {
+          options.mouseSensitivity = parseFloat(val) || 0.5;
+        } else if (key === 'soundCategory_master') {
+          options.soundCategory_master = parseFloat(val) || 1.0;
+        } else if (key === 'soundCategory_music') {
+          options.soundCategory_music = parseFloat(val) || 1.0;
+        } else if (key === 'fullscreen') {
+          options.fullscreen = val === 'true';
+        } else if (key === 'resourcePacks') {
+          try {
+            options.resourcePacks = JSON.parse(val);
+          } catch (e) {}
+        }
+      }
+    }
+
+    return { success: true, options, availableResourcePacks };
+  } catch (err) {
+    console.error('Failed to read game options:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('save-game-options', async (event, packKey, optionsObj) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const optionsPath = path.join(instanceDir, 'options.txt');
+
+    if (!fs.existsSync(instanceDir)) {
+      fs.mkdirSync(instanceDir, { recursive: true });
+    }
+
+    let optionsMap = new Map();
+    if (fs.existsSync(optionsPath)) {
+      const content = fs.readFileSync(optionsPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const part = line.trim();
+        if (!part) continue;
+        const index = part.indexOf(':');
+        if (index === -1) {
+          optionsMap.set(part, null);
+          continue;
+        }
+        const key = part.substring(0, index).trim();
+        const val = part.substring(index + 1).trim();
+        optionsMap.set(key, val);
+      }
+    }
+
+    if (optionsObj.renderDistance !== undefined) {
+      optionsMap.set('renderDistance', String(optionsObj.renderDistance));
+    }
+    if (optionsObj.enableVsync !== undefined) {
+      optionsMap.set('enableVsync', String(optionsObj.enableVsync));
+    }
+    if (optionsObj.fov !== undefined) {
+      optionsMap.set('fov', String(optionsObj.fov));
+    }
+    if (optionsObj.mouseSensitivity !== undefined) {
+      optionsMap.set('mouseSensitivity', String(optionsObj.mouseSensitivity));
+    }
+    if (optionsObj.soundCategory_master !== undefined) {
+      optionsMap.set('soundCategory_master', String(optionsObj.soundCategory_master));
+    }
+    if (optionsObj.soundCategory_music !== undefined) {
+      optionsMap.set('soundCategory_music', String(optionsObj.soundCategory_music));
+    }
+    if (optionsObj.fullscreen !== undefined) {
+      optionsMap.set('fullscreen', String(optionsObj.fullscreen));
+    }
+    if (optionsObj.resourcePacks !== undefined) {
+      optionsMap.set('resourcePacks', JSON.stringify(optionsObj.resourcePacks));
+    }
+
+    let newContent = '';
+    for (const [key, val] of optionsMap.entries()) {
+      if (val === null) {
+        newContent += key + '\n';
+      } else {
+        newContent += `${key}:${val}\n`;
+      }
+    }
+
+    fs.writeFileSync(optionsPath, newContent, 'utf8');
+    console.log(`Saved options.txt successfully for ${packKey}`);
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to save game options:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // Open website externally
 ipcMain.on('open-website', () => {
   shell.openExternal('https://submarinemilk.com');

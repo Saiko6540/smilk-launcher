@@ -288,53 +288,135 @@
         <button class="close-btn" id="pack-settings-close">&times;</button>
       </div>
       
-      <div class="modal-body">
-        <div class="form-group">
-          <label>Addons & Extensions</label>
-          <div class="addon-control-card">
-            <div class="form-group row-group" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; flex-direction: row; justify-content: space-between; align-items: center;">
-              <div>
-                <label style="font-size: 13px; font-weight: 600; color: #fff;">Shader Support (Iris / Oculus)</label>
-                <span class="form-tip" style="display: block; font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px;">Enables shaders. Installs Iris (Fabric) or Oculus (Forge).</span>
+      <div class="modal-body" style="padding: 15px 20px 20px 20px; max-height: 480px; overflow-y: auto;">
+        <!-- Tabs Header -->
+        <div class="settings-tabs" style="display: flex; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px; margin-bottom: 15px; width: 100%;">
+          <button class="tab-btn active" id="tab-btn-addons" data-tab="addons" style="background: none; border: none; outline: none; color: #fff; border-bottom: 2px solid var(--primary); padding: 5px 10px 8px 10px; cursor: pointer; font-size: 12px; font-weight: 700; transition: all 0.2s;">Addons</button>
+          <button class="tab-btn" id="tab-btn-options" data-tab="options" style="background: none; border: none; outline: none; color: rgba(255,255,255,0.4); border-bottom: 2px solid transparent; padding: 5px 10px 8px 10px; cursor: pointer; font-size: 12px; font-weight: 700; transition: all 0.2s;" onmouseover="if(!this.classList.contains('active')) this.style.color='rgba(255,255,255,0.7)'" onmouseout="if(!this.classList.contains('active')) this.style.color='rgba(255,255,255,0.4)'">Minecraft Settings</button>
+        </div>
+
+        <!-- Panel 1: Addons -->
+        <div id="tab-panel-addons" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+          <div class="form-group" style="width: 100%;">
+            <div class="addon-control-card" style="margin-top: 0; width: 100%; box-sizing: border-box;">
+              <div class="form-group row-group" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; flex-direction: row; justify-content: space-between; align-items: center; width: 100%;">
+                <div>
+                  <label style="font-size: 13px; font-weight: 600; color: #fff;">Shader Support (Iris / Oculus)</label>
+                  <span class="form-tip" style="display: block; font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px;">Enables shaders. Installs Iris (Fabric) or Oculus (Forge).</span>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="pack-settings-shaders">
+                  <span class="slider-switch"></span>
+                </label>
               </div>
+              <div class="addon-actions" id="pack-shaders-actions" style="display: none; flex-direction: column; gap: 10px; padding-top: 5px; width: 100%;">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                  <button id="pack-open-shaders-btn" class="secondary-btn" style="font-size: 11px; padding: 6px 12px; height: auto;">Open Shaders Folder</button>
+                  <div style="display: flex; gap: 10px; align-items: center;">
+                    <a href="#" id="pack-download-shaders-link" style="color: var(--primary); font-size: 11px; text-decoration: none; font-weight: 600; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--primary)'">⚡ Get Shaders</a>
+                    <a href="#" id="pack-shaders-help-btn" style="color: rgba(255,255,255,0.4); font-size: 11px; text-decoration: none; font-weight: 600; transition: color 0.3s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">❓ How to install?</a>
+                  </div>
+                </div>
+                
+                <!-- Shaders installation instructions panel -->
+                <div id="shaders-help-panel" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; font-size: 10px; color: rgba(255,255,255,0.6); line-height: 1.4; display: none; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; text-align: left;">
+                  <p style="font-weight: bold; margin-bottom: 2px; color: #fff;">How to install shaders:</p>
+                  <p>1. Toggle <strong>Shaders Support</strong> ON. The launcher will automatically fetch the compatible **Iris mod** (for Fabric 1.21.1 *Vanilla+*) or **Oculus mod** (for Forge packs).</p>
+                  <p>2. Click <strong>Get Shaders</strong> to visit Modrinth and download a shader pack (.zip).</p>
+                  <p>3. <strong>Drag & Drop</strong> the downloaded shaderpack .zip file directly into the box below (or click the box to browse).</p>
+                  <p>4. Start the game, go to <strong>Options -> Video Settings -> Shader Packs</strong>, select your shader, and enjoy!</p>
+                </div>
+
+                <!-- Drag and drop zone -->
+                <div id="shaders-dropzone" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 15px; text-align: center; color: rgba(255,255,255,0.4); font-size: 11px; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; cursor: pointer; user-select: none; background: rgba(0,0,0,0.15); width: 100%; box-sizing: border-box;" onmouseover="this.style.borderColor='var(--primary)'; this.style.color='#fff'; this.style.background='rgba(255,255,255,0.02)';" onmouseout="if (!this.classList.contains('dragover')) { this.style.borderColor='rgba(255,255,255,0.15)'; this.style.color='rgba(255,255,255,0.4)'; this.style.background='rgba(0,0,0,0.15)'; }">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px; opacity: 0.7;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                  <span>Drag & Drop shader .zip file here</span>
+                  <span style="font-size: 9px; opacity: 0.5;">or click to browse from folder</span>
+                </div>
+                <div id="shaders-dropzone-status" style="font-size: 10px; text-align: center; color: #2cd63b; display: none; font-weight: 600; width: 100%;"></div>
+
+                <!-- Installed shaders list container -->
+                <div id="installed-shaders-container" style="display: none; flex-direction: column; gap: 8px; width: 100%; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 5px;">
+                  <p style="font-size: 11px; font-weight: 700; color: #fff; margin-bottom: 2px; text-align: left;">Installed Shaders:</p>
+                  <div id="installed-shaders-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; width: 100%; box-sizing: border-box; padding-right: 5px;">
+                    <!-- Dynamically populated shader pack list items -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel 2: Minecraft Settings -->
+        <div id="tab-panel-options" style="display: none; flex-direction: column; gap: 15px; width: 100%;">
+          <!-- Render Distance -->
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <label style="font-size: 11px; font-weight: 700; color: #fff;">Render Distance</label>
+              <span id="opt-render-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">12 chunks</span>
+            </div>
+            <input type="range" id="opt-render" min="2" max="32" step="1" value="12" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+          </div>
+
+          <!-- FOV -->
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <label style="font-size: 11px; font-weight: 700; color: #fff;">FOV</label>
+              <span id="opt-fov-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">70 (Normal)</span>
+            </div>
+            <input type="range" id="opt-fov" min="30" max="110" step="1" value="70" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+          </div>
+
+          <!-- Mouse Sensitivity -->
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <label style="font-size: 11px; font-weight: 700; color: #fff;">Mouse Sensitivity</label>
+              <span id="opt-sensitivity-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100% (Normal)</span>
+            </div>
+            <input type="range" id="opt-sensitivity" min="0" max="200" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+          </div>
+
+          <!-- Master Volume -->
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <label style="font-size: 11px; font-weight: 700; color: #fff;">Master Volume</label>
+              <span id="opt-master-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100%</span>
+            </div>
+            <input type="range" id="opt-master" min="0" max="100" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+          </div>
+
+          <!-- Music Volume -->
+          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <label style="font-size: 11px; font-weight: 700; color: #fff;">Music Volume</label>
+              <span id="opt-music-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100%</span>
+            </div>
+            <input type="range" id="opt-music" min="0" max="100" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+          </div>
+
+          <!-- Toggles (VSync & Fullscreen) -->
+          <div style="display: flex; justify-content: space-between; gap: 15px; width: 100%; box-sizing: border-box;">
+            <div class="addon-control-card" style="flex: 1; display: flex; justify-content: space-between; align-items: center; margin-top: 0; padding: 10px 12px; box-sizing: border-box;">
+              <span style="font-size: 11px; font-weight: 600; color: #fff;">VSync</span>
               <label class="switch">
-                <input type="checkbox" id="pack-settings-shaders">
+                <input type="checkbox" id="opt-vsync">
                 <span class="slider-switch"></span>
               </label>
             </div>
-            <div class="addon-actions" id="pack-shaders-actions" style="display: none; flex-direction: column; gap: 10px; padding-top: 5px; width: 100%;">
-              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <button id="pack-open-shaders-btn" class="secondary-btn" style="font-size: 11px; padding: 6px 12px; height: auto;">Open Shaders Folder</button>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                  <a href="#" id="pack-download-shaders-link" style="color: var(--primary); font-size: 11px; text-decoration: none; font-weight: 600; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--primary)'">⚡ Get Shaders</a>
-                  <a href="#" id="pack-shaders-help-btn" style="color: rgba(255,255,255,0.4); font-size: 11px; text-decoration: none; font-weight: 600; transition: color 0.3s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">❓ How to install?</a>
-                </div>
-              </div>
-              
-              <!-- Shaders installation instructions panel -->
-              <div id="shaders-help-panel" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; font-size: 10px; color: rgba(255,255,255,0.6); line-height: 1.4; display: none; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box; text-align: left;">
-                <p style="font-weight: bold; margin-bottom: 2px; color: #fff;">How to install shaders:</p>
-                <p>1. Toggle <strong>Shaders Support</strong> ON. The launcher will automatically fetch the compatible **Iris mod** (for Fabric 1.21.1 *Vanilla+*) or **Oculus mod** (for Forge packs).</p>
-                <p>2. Click <strong>Get Shaders</strong> to visit Modrinth and download a shader pack (.zip).</p>
-                <p>3. <strong>Drag & Drop</strong> the downloaded shaderpack .zip file directly into the box below (or click the box to browse).</p>
-                <p>4. Start the game, go to <strong>Options -> Video Settings -> Shader Packs</strong>, select your shader, and enjoy!</p>
-              </div>
+            <div class="addon-control-card" style="flex: 1; display: flex; justify-content: space-between; align-items: center; margin-top: 0; padding: 10px 12px; box-sizing: border-box;">
+              <span style="font-size: 11px; font-weight: 600; color: #fff;">Fullscreen</span>
+              <label class="switch">
+                <input type="checkbox" id="opt-fullscreen">
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+          </div>
 
-              <!-- Drag and drop zone -->
-              <div id="shaders-dropzone" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 15px; text-align: center; color: rgba(255,255,255,0.4); font-size: 11px; transition: all 0.3s ease; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; cursor: pointer; user-select: none; background: rgba(0,0,0,0.15); width: 100%; box-sizing: border-box;" onmouseover="this.style.borderColor='var(--primary)'; this.style.color='#fff'; this.style.background='rgba(255,255,255,0.02)';" onmouseout="if (!this.classList.contains('dragover')) { this.style.borderColor='rgba(255,255,255,0.15)'; this.style.color='rgba(255,255,255,0.4)'; this.style.background='rgba(0,0,0,0.15)'; }">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 2px; opacity: 0.7;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-                <span>Drag & Drop shader .zip file here</span>
-                <span style="font-size: 9px; opacity: 0.5;">or click to browse from folder</span>
-              </div>
-              <div id="shaders-dropzone-status" style="font-size: 10px; text-align: center; color: #2cd63b; display: none; font-weight: 600; width: 100%;"></div>
-
-              <!-- Installed shaders list container -->
-              <div id="installed-shaders-container" style="display: none; flex-direction: column; gap: 8px; width: 100%; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; margin-top: 5px;">
-                <p style="font-size: 11px; font-weight: 700; color: #fff; margin-bottom: 2px; text-align: left;">Installed Shaders:</p>
-                <div id="installed-shaders-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; width: 100%; box-sizing: border-box; padding-right: 5px;">
-                  <!-- Dynamically populated shader pack list items -->
-                </div>
-              </div>
+          <!-- Resource Packs Checklist -->
+          <div id="resourcepacks-container" style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 5px; width: 100%; box-sizing: border-box;">
+            <p style="font-size: 11px; font-weight: 700; color: #fff; margin-bottom: 2px; text-align: left;">Active Resource Packs:</p>
+            <div id="resourcepacks-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; width: 100%; box-sizing: border-box; padding-right: 5px;">
+              <!-- Dynamically populated resource packs checklist -->
             </div>
           </div>
         </div>

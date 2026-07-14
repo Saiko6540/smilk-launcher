@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('api', {
   selectShaderpackFile: () => ipcRenderer.invoke('select-shaderpack-file'),
   getInstalledShaders: (packKey) => ipcRenderer.invoke('get-installed-shaders', packKey),
   deleteShaderpack: (packKey, filename) => ipcRenderer.invoke('delete-shaderpack', packKey, filename),
+  readGameOptions: (packKey) => ipcRenderer.invoke('read-game-options', packKey),
+  saveGameOptions: (packKey, options) => ipcRenderer.invoke('save-game-options', packKey, options),
 
   
   // Event listeners
