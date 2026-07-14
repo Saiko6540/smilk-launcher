@@ -164,7 +164,9 @@ function checkJavaVersion(javaPath, mcVersion) {
       const mcMinor = parseInt(parts[1], 10);
       const mcPatch = parseInt(parts[2] || '0', 10);
       
-      if (mcMinor >= 21 || (mcMinor === 20 && mcPatch >= 5)) {
+      if (mcMinor >= 21) {
+        minJavaVersion = 22; // c2me mod in 1.21.1 requires Java 22 Vector API
+      } else if (mcMinor === 20 && mcPatch >= 5) {
         minJavaVersion = 21;
       } else if (mcMinor >= 17) {
         minJavaVersion = 17;

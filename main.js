@@ -350,6 +350,89 @@ ipcMain.handle('select-java-path', async () => {
   return null;
 });
 
+ipcMain.handle('select-shaderpack-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Shaderpack (.zip)',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Shaderpack Archive', extensions: ['zip'] }
+    ]
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths;
+  }
+  return null;
+});
+
+ipcMain.handle('import-shaderpack', async (event, packKey, filePaths) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const shaderpacksDir = path.join(instanceDir, 'shaderpacks');
+    
+    if (!fs.existsSync(shaderpacksDir)) {
+      fs.mkdirSync(shaderpacksDir, { recursive: true });
+    }
+    
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const imported = [];
+    
+    for (const fp of paths) {
+      const filename = path.basename(fp);
+      const destPath = path.join(shaderpacksDir, filename);
+      fs.copyFileSync(fp, destPath);
+      imported.push(filename);
+    }
+    
+    return { success: true, imported };
+  } catch (err) {
+    console.error('Failed to import shaderpacks:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('get-installed-shaders', async (event, packKey) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const shaderpacksDir = path.join(instanceDir, 'shaderpacks');
+    if (!fs.existsSync(shaderpacksDir)) {
+      return [];
+    }
+    const files = fs.readdirSync(shaderpacksDir);
+    const shaderpacks = [];
+    for (const file of files) {
+      const fullPath = path.join(shaderpacksDir, file);
+      if (file.endsWith('.zip') || fs.statSync(fullPath).isDirectory()) {
+        shaderpacks.push(file);
+      }
+    }
+    return shaderpacks;
+  } catch (err) {
+    console.error('Failed to get installed shaders:', err);
+    return [];
+  }
+});
+
+ipcMain.handle('delete-shaderpack', async (event, packKey, filename) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const filePath = path.join(instanceDir, 'shaderpacks', filename);
+    if (fs.existsSync(filePath)) {
+      if (fs.statSync(filePath).isDirectory()) {
+        fs.rmSync(filePath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(filePath);
+      }
+      console.log(`Deleted shaderpack ${filename}`);
+      return { success: true };
+    }
+    return { success: false, error: 'File not found' };
+  } catch (err) {
+    console.error('Failed to delete shaderpack:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // Open website externally
 ipcMain.on('open-website', () => {
   shell.openExternal('https://submarinemilk.com');
@@ -362,6 +445,20 @@ ipcMain.on('open-instances-dir', () => {
     fs.mkdirSync(instancesDir, { recursive: true });
   }
   shell.openPath(instancesDir);
+});
+
+// Open shaders directory externally
+ipcMain.on('open-shaders-dir', (event, packKey) => {
+  const shadersDir = path.join(userDataPath, 'game_data', 'instances', packKey, 'shaderpacks');
+  if (!fs.existsSync(shadersDir)) {
+    fs.mkdirSync(shadersDir, { recursive: true });
+  }
+  shell.openPath(shadersDir);
+});
+
+// Open external link
+ipcMain.on('open-external-link', (event, url) => {
+  shell.openExternal(url);
 });
 
 // Window controls IPC
@@ -445,7 +542,7 @@ ipcMain.handle('start-update', async (event, packKey) => {
 
   // Run real update
   try {
-    await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress);
+    await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress, settings);
     return { success: true };
   } catch (err) {
     sendProgress({ status: 'error', message: err.message });
@@ -533,6 +630,7 @@ ipcMain.handle('start-launch', async (event, packKey) => {
 // Install Java IPC
 ipcMain.handle('install-java', async (event, requiredVersion) => {
   const AdmZip = require('adm-zip');
+  const https = require('https');
 
   const javaDir = path.join(userDataPath, 'game_data', 'java', `jre_${requiredVersion}`);
   if (fs.existsSync(javaDir)) {

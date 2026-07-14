@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('api', {
   openWebsite: () => ipcRenderer.send('open-website'),
   openConsoleWindow: () => ipcRenderer.send('open-console-window'),
   openInstancesDir: () => ipcRenderer.send('open-instances-dir'),
+  openShadersDir: (packKey) => ipcRenderer.send('open-shaders-dir', packKey),
+  openExternalLink: (url) => ipcRenderer.send('open-external-link', url),
   minimizeWindow: () => ipcRenderer.send('window-minimize'),
   maximizeWindow: () => ipcRenderer.send('window-maximize'),
   closeWindow: () => ipcRenderer.send('window-close'),
@@ -22,6 +24,10 @@ contextBridge.exposeInMainWorld('api', {
   launcherShow: () => ipcRenderer.send('launcher-show'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   installAppUpdate: () => ipcRenderer.invoke('install-app-update'),
+  importShaderpack: (packKey, filePath) => ipcRenderer.invoke('import-shaderpack', packKey, filePath),
+  selectShaderpackFile: () => ipcRenderer.invoke('select-shaderpack-file'),
+  getInstalledShaders: (packKey) => ipcRenderer.invoke('get-installed-shaders', packKey),
+  deleteShaderpack: (packKey, filename) => ipcRenderer.invoke('delete-shaderpack', packKey, filename),
 
   
   // Event listeners

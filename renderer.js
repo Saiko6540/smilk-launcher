@@ -71,6 +71,20 @@ const settingsSaveBtn = document.getElementById('settings-save');
 const settingsResetBtn = document.getElementById('settings-reset-btn');
 const settingsClearBtn = document.getElementById('settings-clear-btn');
 const openInstancesBtn = document.getElementById('open-instances-btn');
+const packSettingsModal = document.getElementById('pack-settings-modal');
+const packSettingsTitle = document.getElementById('pack-settings-title');
+const packSettingsClose = document.getElementById('pack-settings-close');
+const packSettingsShaders = document.getElementById('pack-settings-shaders');
+const packShadersActions = document.getElementById('pack-shaders-actions');
+const packOpenShadersBtn = document.getElementById('pack-open-shaders-btn');
+const packDownloadShadersLink = document.getElementById('pack-download-shaders-link');
+const packShadersHelpBtn = document.getElementById('pack-shaders-help-btn');
+const shadersHelpPanel = document.getElementById('shaders-help-panel');
+const shadersDropzone = document.getElementById('shaders-dropzone');
+const shadersDropzoneStatus = document.getElementById('shaders-dropzone-status');
+const installedShadersContainer = document.getElementById('installed-shaders-container');
+const installedShadersList = document.getElementById('installed-shaders-list');
+const packSettingsSave = document.getElementById('pack-settings-save');
 
 // Website & Debug Buttons
 const websiteBtn = document.getElementById('website-btn');
@@ -1993,6 +2007,11 @@ async function loadSettings() {
   settingsJava.value = settings.javaPath || '';
   settingsArgs.value = settings.jvmArgs || '';
   settingsMock.checked = settings.mockMode;
+  
+  // Ensure addons object exists
+  if (!configSettings.addons) {
+    configSettings.addons = {};
+  }
 
   updateUserAvatar(settings.nickname);
   updateModeBadge(settings.mockMode);
@@ -2005,7 +2024,8 @@ async function saveSettingsData() {
     javaPath: settingsJava.value.trim(),
     jvmArgs: settingsArgs.value.trim(),
     selectedPack: activePack,
-    mockMode: settingsMock.checked
+    mockMode: settingsMock.checked,
+    addons: configSettings.addons || {}
   };
 
   const res = await window.api.saveSettings(settings);
@@ -2134,6 +2154,304 @@ settingsResetBtn.addEventListener('click', async () => {
 if (openInstancesBtn) {
   openInstancesBtn.addEventListener('click', () => {
     window.api.openInstancesDir();
+  });
+}
+
+// Modpack Settings Modal Logic
+let editingPackSettings = null;
+
+function openPackSettings(packKey) {
+  editingPackSettings = packKey;
+  const details = packDetails[packKey];
+  if (packSettingsTitle && details) {
+    packSettingsTitle.textContent = `${details.title} Configuration`;
+  }
+  
+  if (!configSettings.addons) configSettings.addons = {};
+  if (!configSettings.addons[packKey]) configSettings.addons[packKey] = { shaders: false };
+  
+  const packAddons = configSettings.addons[packKey];
+  if (packSettingsShaders) {
+    packSettingsShaders.checked = packAddons.shaders || false;
+  }
+  if (packShadersActions) {
+    packShadersActions.style.display = packAddons.shaders ? 'flex' : 'none';
+  }
+  
+  if (packAddons.shaders) {
+    loadInstalledShaders(packKey);
+  } else {
+    if (installedShadersContainer) installedShadersContainer.style.display = 'none';
+  }
+
+  if (packSettingsModal) {
+    packSettingsModal.classList.remove('hidden');
+  }
+}
+
+// Event Delegation for Gear button clicks in Modpack List
+const modpackListContainer = document.querySelector('.modpack-list');
+if (modpackListContainer) {
+  modpackListContainer.addEventListener('click', (e) => {
+    const gearBtn = e.target.closest('.pack-settings-btn');
+    if (gearBtn) {
+      e.stopPropagation();
+      e.preventDefault();
+      const item = gearBtn.closest('.modpack-item');
+      if (item) {
+        openPackSettings(item.dataset.pack);
+      }
+    }
+  });
+}
+
+// Bind modal events
+if (packSettingsClose) {
+  packSettingsClose.addEventListener('click', () => {
+    if (packSettingsModal) packSettingsModal.classList.add('hidden');
+    if (shadersHelpPanel) shadersHelpPanel.style.display = 'none';
+    if (shadersDropzoneStatus) shadersDropzoneStatus.style.display = 'none';
+  });
+}
+if (packSettingsModal) {
+  packSettingsModal.addEventListener('click', (e) => {
+    if (e.target === packSettingsModal) {
+      packSettingsModal.classList.add('hidden');
+      if (shadersHelpPanel) shadersHelpPanel.style.display = 'none';
+      if (shadersDropzoneStatus) shadersDropzoneStatus.style.display = 'none';
+    }
+  });
+}
+
+if (packSettingsShaders) {
+  packSettingsShaders.addEventListener('change', (e) => {
+    if (packShadersActions) {
+      packShadersActions.style.display = e.target.checked ? 'flex' : 'none';
+    }
+    if (e.target.checked) {
+      if (editingPackSettings) loadInstalledShaders(editingPackSettings);
+    } else {
+      if (installedShadersContainer) installedShadersContainer.style.display = 'none';
+    }
+  });
+}
+
+if (packOpenShadersBtn) {
+  packOpenShadersBtn.addEventListener('click', () => {
+    if (editingPackSettings) {
+      window.api.openShadersDir(editingPackSettings);
+    }
+  });
+}
+
+if (packDownloadShadersLink) {
+  packDownloadShadersLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.api.openExternalLink('https://modrinth.com/shaders');
+  });
+}
+
+// Toggle Help Panel
+if (packShadersHelpBtn) {
+  packShadersHelpBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (shadersHelpPanel) {
+      const isHidden = shadersHelpPanel.style.display === 'none' || shadersHelpPanel.style.display === '';
+      shadersHelpPanel.style.display = isHidden ? 'flex' : 'none';
+    }
+  });
+}
+
+// Drag & Drop Shaders
+if (shadersDropzone) {
+  // Prevent defaults for all drag events
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    shadersDropzone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  // Highlight drop zone when item is dragged over it
+  ['dragenter', 'dragover'].forEach(eventName => {
+    shadersDropzone.addEventListener(eventName, () => {
+      shadersDropzone.classList.add('dragover');
+      shadersDropzone.style.borderColor = 'var(--primary)';
+      shadersDropzone.style.color = '#fff';
+      shadersDropzone.style.background = 'rgba(255, 255, 255, 0.05)';
+    }, false);
+  });
+
+  ['dragleave', 'dragend', 'drop'].forEach(eventName => {
+    shadersDropzone.addEventListener(eventName, () => {
+      shadersDropzone.classList.remove('dragover');
+      shadersDropzone.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+      shadersDropzone.style.color = 'rgba(255, 255, 255, 0.4)';
+      shadersDropzone.style.background = 'rgba(0, 0, 0, 0.15)';
+    }, false);
+  });
+
+  // Handle dropped files
+  shadersDropzone.addEventListener('drop', async (e) => {
+    const dt = e.dataTransfer;
+    const files = Array.from(dt.files);
+    
+    if (files.length === 0) return;
+    
+    // Filter only .zip files
+    const zipFiles = files.filter(f => f.name.toLowerCase().endsWith('.zip'));
+    if (zipFiles.length === 0) {
+      showDropzoneStatus('Only .zip files are supported as shaderpacks!', '#ff4757');
+      return;
+    }
+    
+    const filePaths = zipFiles.map(f => f.path);
+    await handleImportShaderpacks(filePaths);
+  });
+
+  // Handle click on dropzone to select file
+  shadersDropzone.addEventListener('click', async () => {
+    const filePaths = await window.api.selectShaderpackFile();
+    if (filePaths && filePaths.length > 0) {
+      await handleImportShaderpacks(filePaths);
+    }
+  });
+}
+
+// Helper function to import shaderpacks and update status UI
+async function handleImportShaderpacks(filePaths) {
+  if (!editingPackSettings) return;
+  
+  showDropzoneStatus('Importing shaderpack(s)...', 'var(--primary)');
+  const res = await window.api.importShaderpack(editingPackSettings, filePaths);
+  if (res && res.success) {
+    const names = res.imported.join(', ');
+    showDropzoneStatus(`Successfully imported: ${names}!`, '#2cd63b');
+    // Reload shaders list
+    loadInstalledShaders(editingPackSettings);
+    // Hide status after 4 seconds
+    setTimeout(() => {
+      if (shadersDropzoneStatus) shadersDropzoneStatus.style.display = 'none';
+    }, 4000);
+  } else {
+    showDropzoneStatus('Failed to import: ' + (res ? res.error : 'Unknown error'), '#ff4757');
+  }
+}
+
+function showDropzoneStatus(message, color) {
+  if (shadersDropzoneStatus) {
+    shadersDropzoneStatus.textContent = message;
+    shadersDropzoneStatus.style.color = color;
+    shadersDropzoneStatus.style.display = 'block';
+  }
+}
+
+async function loadInstalledShaders(packKey) {
+  if (!installedShadersList) return;
+  installedShadersList.innerHTML = '<div style="color: rgba(255,255,255,0.4); font-size: 10px; text-align: center; padding: 10px 0; width: 100%;">Loading shaderpacks...</div>';
+  
+  if (installedShadersContainer) {
+    installedShadersContainer.style.display = 'flex';
+  }
+
+  const shaders = await window.api.getInstalledShaders(packKey);
+  
+  if (!shaders || shaders.length === 0) {
+    installedShadersList.innerHTML = '<div style="color: rgba(255,255,255,0.3); font-size: 10px; text-align: center; padding: 15px 0; width: 100%;">No shaderpacks installed. Drag & drop or click the box above to add some!</div>';
+    return;
+  }
+
+  installedShadersList.innerHTML = '';
+  shaders.forEach(shader => {
+    const item = document.createElement('div');
+    item.style.display = 'flex';
+    item.style.justifyContent = 'space-between';
+    item.style.alignItems = 'center';
+    item.style.background = 'rgba(255, 255, 255, 0.03)';
+    item.style.border = '1px solid rgba(255, 255, 255, 0.06)';
+    item.style.borderRadius = '6px';
+    item.style.padding = '6px 10px';
+    item.style.fontSize = '10px';
+    item.style.color = '#fff';
+    item.style.boxSizing = 'border-box';
+    item.style.width = '100%';
+    item.style.gap = '10px';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = shader;
+    nameSpan.style.overflow = 'hidden';
+    nameSpan.style.textOverflow = 'ellipsis';
+    nameSpan.style.whiteSpace = 'nowrap';
+    nameSpan.style.flex = '1';
+    nameSpan.title = shader;
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.innerHTML = '&times;';
+    deleteBtn.title = 'Delete shaderpack';
+    deleteBtn.style.background = 'none';
+    deleteBtn.style.border = 'none';
+    deleteBtn.style.outline = 'none';
+    deleteBtn.style.color = 'rgba(255,255,255,0.3)';
+    deleteBtn.style.cursor = 'pointer';
+    deleteBtn.style.fontSize = '14px';
+    deleteBtn.style.fontWeight = 'bold';
+    deleteBtn.style.padding = '0 4px';
+    deleteBtn.style.display = 'flex';
+    deleteBtn.style.alignItems = 'center';
+    deleteBtn.style.justifyContent = 'center';
+    deleteBtn.style.transition = 'color 0.2s';
+    
+    deleteBtn.onmouseover = () => deleteBtn.style.color = '#ff4757';
+    deleteBtn.onmouseout = () => deleteBtn.style.color = 'rgba(255,255,255,0.3)';
+
+    deleteBtn.onclick = async () => {
+      if (confirm(`Are you sure you want to delete "${shader}"?`)) {
+        deleteBtn.disabled = true;
+        const res = await window.api.deleteShaderpack(packKey, shader);
+        if (res && res.success) {
+          loadInstalledShaders(packKey);
+        } else {
+          alert('Failed to delete: ' + (res ? res.error : 'Unknown error'));
+          deleteBtn.disabled = false;
+        }
+      }
+    };
+
+    item.appendChild(nameSpan);
+    item.appendChild(deleteBtn);
+    installedShadersList.appendChild(item);
+  });
+}
+
+if (packSettingsSave) {
+  packSettingsSave.addEventListener('click', async () => {
+    if (editingPackSettings) {
+      if (!configSettings.addons) configSettings.addons = {};
+      configSettings.addons[editingPackSettings] = {
+        shaders: packSettingsShaders.checked
+      };
+      
+      const settings = {
+        nickname: settingsNickname.value.trim() || 'Player',
+        ramGb: parseInt(settingsRam.value, 10),
+        javaPath: settingsJava.value.trim(),
+        jvmArgs: settingsArgs.value.trim(),
+        selectedPack: activePack,
+        mockMode: settingsMock.checked,
+        addons: configSettings.addons
+      };
+      
+      const res = await window.api.saveSettings(settings);
+      if (res.success) {
+        configSettings = settings;
+        if (packSettingsModal) packSettingsModal.classList.add('hidden');
+        if (shadersHelpPanel) shadersHelpPanel.style.display = 'none';
+        if (shadersDropzoneStatus) shadersDropzoneStatus.style.display = 'none';
+        updateVersionCheck();
+      } else {
+        alert('Failed to save settings: ' + res.error);
+      }
+    }
   });
 }
 
@@ -2387,8 +2705,7 @@ window.api.onLaunchStatus((data) => {
         const result = await window.api.installJava(data.requiredVersion);
         if (result && result.success) {
           javaModal.classList.add('hidden');
-          // Update the input field in settings if it's open
-          document.getElementById('settings-javapath').value = result.javaPath;
+          if (settingsJava) settingsJava.value = result.javaPath;
           alert('Java installed successfully! You can now launch the game.');
         } else {
           throw new Error('Installation failed without throwing an error');
