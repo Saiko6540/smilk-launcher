@@ -94,6 +94,10 @@ const optFov = document.getElementById('opt-fov');
 const optFovVal = document.getElementById('opt-fov-val');
 const optSensitivity = document.getElementById('opt-sensitivity');
 const optSensitivityVal = document.getElementById('opt-sensitivity-val');
+const optGuiScale = document.getElementById('opt-gui-scale');
+const optGuiScaleVal = document.getElementById('opt-gui-scale-val');
+const optFps = document.getElementById('opt-fps');
+const optFpsVal = document.getElementById('opt-fps-val');
 const optMaster = document.getElementById('opt-master');
 const optMasterVal = document.getElementById('opt-master-val');
 const optMusic = document.getElementById('opt-music');
@@ -2490,6 +2494,20 @@ async function loadGameOptions(packKey) {
       else optSensitivityVal.textContent = `${sensVal}%`;
     }
   }
+  if (optGuiScale) {
+    optGuiScale.value = options.guiScale;
+    if (optGuiScaleVal) {
+      if (options.guiScale === 0) optGuiScaleVal.textContent = 'Auto';
+      else optGuiScaleVal.textContent = `${options.guiScale}x`;
+    }
+  }
+  if (optFps) {
+    optFps.value = options.maxFps;
+    if (optFpsVal) {
+      if (options.maxFps === 260) optFpsVal.textContent = 'Unlimited';
+      else optFpsVal.textContent = `${options.maxFps} FPS`;
+    }
+  }
   if (optMaster) {
     const masterVal = Math.round(options.soundCategory_master * 100);
     optMaster.value = masterVal;
@@ -2623,6 +2641,24 @@ if (optSensitivity) {
     }
   });
 }
+if (optGuiScale) {
+  optGuiScale.addEventListener('input', (e) => {
+    if (optGuiScaleVal) {
+      const val = parseInt(e.target.value, 10);
+      if (val === 0) optGuiScaleVal.textContent = 'Auto';
+      else optGuiScaleVal.textContent = `${val}x`;
+    }
+  });
+}
+if (optFps) {
+  optFps.addEventListener('input', (e) => {
+    if (optFpsVal) {
+      const val = parseInt(e.target.value, 10);
+      if (val === 260) optFpsVal.textContent = 'Unlimited';
+      else optFpsVal.textContent = `${val} FPS`;
+    }
+  });
+}
 if (optMaster) {
   optMaster.addEventListener('input', (e) => {
     if (optMasterVal) optMasterVal.textContent = `${e.target.value}%`;
@@ -2657,7 +2693,7 @@ if (packSettingsSave) {
         configSettings = settings;
 
         // Save options.txt parameters
-        if (optRender && optFov && optSensitivity && optMaster && optMusic && optVsync && optFullscreen) {
+        if (optRender && optFov && optSensitivity && optGuiScale && optFps && optMaster && optMusic && optVsync && optFullscreen) {
           const activePacks = ['vanilla'];
           const packItems = document.querySelectorAll('#resourcepacks-list > div');
           packItems.forEach(item => {
@@ -2671,6 +2707,8 @@ if (packSettingsSave) {
             renderDistance: parseInt(optRender.value, 10),
             fov: (parseInt(optFov.value, 10) - 70) / 40,
             mouseSensitivity: parseFloat(optSensitivity.value) / 200,
+            guiScale: parseInt(optGuiScale.value, 10),
+            maxFps: parseInt(optFps.value, 10),
             soundCategory_master: parseFloat(optMaster.value) / 100,
             soundCategory_music: parseFloat(optMusic.value) / 100,
             enableVsync: optVsync.checked,

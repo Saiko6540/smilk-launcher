@@ -459,6 +459,8 @@ ipcMain.handle('read-game-options', async (event, packKey) => {
       enableVsync: true,
       fov: 0.0,
       mouseSensitivity: 0.5,
+      guiScale: 0,
+      maxFps: 260,
       soundCategory_master: 1.0,
       soundCategory_music: 1.0,
       fullscreen: false,
@@ -485,6 +487,10 @@ ipcMain.handle('read-game-options', async (event, packKey) => {
           options.fov = parseFloat(val) || 0.0;
         } else if (key === 'mouseSensitivity') {
           options.mouseSensitivity = parseFloat(val) || 0.5;
+        } else if (key === 'guiScale') {
+          options.guiScale = parseInt(val, 10) || 0;
+        } else if (key === 'maxFps') {
+          options.maxFps = parseInt(val, 10) || 260;
         } else if (key === 'soundCategory_master') {
           options.soundCategory_master = parseFloat(val) || 1.0;
         } else if (key === 'soundCategory_music') {
@@ -544,6 +550,12 @@ ipcMain.handle('save-game-options', async (event, packKey, optionsObj) => {
     }
     if (optionsObj.mouseSensitivity !== undefined) {
       optionsMap.set('mouseSensitivity', String(optionsObj.mouseSensitivity));
+    }
+    if (optionsObj.guiScale !== undefined) {
+      optionsMap.set('guiScale', String(optionsObj.guiScale));
+    }
+    if (optionsObj.maxFps !== undefined) {
+      optionsMap.set('maxFps', String(optionsObj.maxFps));
     }
     if (optionsObj.soundCategory_master !== undefined) {
       optionsMap.set('soundCategory_master', String(optionsObj.soundCategory_master));
