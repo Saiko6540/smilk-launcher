@@ -865,23 +865,6 @@ ipcMain.on('open-console-window', () => {
 });
 
 // Window Control IPCs
-ipcMain.on('window-minimize', () => {
-  if (mainWindow) mainWindow.minimize();
-});
-
-ipcMain.on('window-maximize', () => {
-  if (mainWindow) {
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
-    } else {
-      mainWindow.maximize();
-    }
-  }
-});
-
-ipcMain.on('window-close', () => {
-  if (mainWindow) mainWindow.close();
-});
 
 ipcMain.on('window-restore', () => {
   if (mainWindow) {
