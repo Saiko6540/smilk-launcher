@@ -101,6 +101,8 @@ const optMusicVal = document.getElementById('opt-music-val');
 const optVsync = document.getElementById('opt-vsync');
 const optFullscreen = document.getElementById('opt-fullscreen');
 const resourcepacksList = document.getElementById('resourcepacks-list');
+const optSettingsFieldsWrapper = document.getElementById('opt-settings-fields-wrapper');
+const optNotInstalledMessage = document.getElementById('opt-not-installed-message');
 const packSettingsSave = document.getElementById('pack-settings-save');
 
 // Website & Debug Buttons
@@ -2449,9 +2451,19 @@ async function loadGameOptions(packKey) {
 
   const res = await window.api.readGameOptions(packKey);
   if (!res || !res.success) {
-    resourcepacksList.innerHTML = '<div style="color: #ff4757; font-size: 10px; text-align: center; padding: 10px 0; width: 100%;">Failed to load options.txt</div>';
+    if (res && res.error === 'Modpack not installed') {
+      if (optSettingsFieldsWrapper) optSettingsFieldsWrapper.style.display = 'none';
+      if (optNotInstalledMessage) optNotInstalledMessage.style.display = 'flex';
+    } else {
+      if (optSettingsFieldsWrapper) optSettingsFieldsWrapper.style.display = 'flex';
+      if (optNotInstalledMessage) optNotInstalledMessage.style.display = 'none';
+      resourcepacksList.innerHTML = `<div style="color: #ff4757; font-size: 10px; text-align: center; padding: 10px 0; width: 100%;">Failed to load options.txt</div>`;
+    }
     return;
   }
+
+  if (optSettingsFieldsWrapper) optSettingsFieldsWrapper.style.display = 'flex';
+  if (optNotInstalledMessage) optNotInstalledMessage.style.display = 'none';
 
   const { options, availableResourcePacks } = res;
 

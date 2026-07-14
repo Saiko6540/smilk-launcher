@@ -436,6 +436,10 @@ ipcMain.handle('delete-shaderpack', async (event, packKey, filename) => {
 ipcMain.handle('read-game-options', async (event, packKey) => {
   try {
     const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const configPath = path.join(instanceDir, 'updater_config.json');
+    if (!fs.existsSync(configPath)) {
+      return { success: false, error: 'Modpack not installed' };
+    }
     const optionsPath = path.join(instanceDir, 'options.txt');
     const resourcepacksDir = path.join(instanceDir, 'resourcepacks');
 

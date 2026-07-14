@@ -349,75 +349,84 @@
 
         <!-- Panel 2: Minecraft Settings -->
         <div id="tab-panel-options" style="display: none; flex-direction: column; gap: 15px; width: 100%;">
-          <!-- Render Distance -->
-          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <label style="font-size: 11px; font-weight: 700; color: #fff;">Render Distance</label>
-              <span id="opt-render-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">12 chunks</span>
+          <div id="opt-settings-fields-wrapper" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+            <!-- Render Distance -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <label style="font-size: 11px; font-weight: 700; color: #fff;">Render Distance</label>
+                <span id="opt-render-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">12 chunks</span>
+              </div>
+              <input type="range" id="opt-render" min="2" max="32" step="1" value="12" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
             </div>
-            <input type="range" id="opt-render" min="2" max="32" step="1" value="12" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+
+            <!-- FOV -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <label style="font-size: 11px; font-weight: 700; color: #fff;">FOV</label>
+                <span id="opt-fov-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">70 (Normal)</span>
+              </div>
+              <input type="range" id="opt-fov" min="30" max="110" step="1" value="70" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+            </div>
+
+            <!-- Mouse Sensitivity -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <label style="font-size: 11px; font-weight: 700; color: #fff;">Mouse Sensitivity</label>
+                <span id="opt-sensitivity-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100% (Normal)</span>
+              </div>
+              <input type="range" id="opt-sensitivity" min="0" max="200" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+            </div>
+
+            <!-- Master Volume -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <label style="font-size: 11px; font-weight: 700; color: #fff;">Master Volume</label>
+                <span id="opt-master-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100%</span>
+              </div>
+              <input type="range" id="opt-master" min="0" max="100" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+            </div>
+
+            <!-- Music Volume -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
+              <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <label style="font-size: 11px; font-weight: 700; color: #fff;">Music Volume</label>
+                <span id="opt-music-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100%</span>
+              </div>
+              <input type="range" id="opt-music" min="0" max="100" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
+            </div>
+
+            <!-- Toggles (VSync & Fullscreen) -->
+            <div style="display: flex; justify-content: space-between; gap: 15px; width: 100%; box-sizing: border-box;">
+              <div class="addon-control-card" style="flex: 1; display: flex; justify-content: space-between; align-items: center; margin-top: 0; padding: 10px 12px; box-sizing: border-box;">
+                <span style="font-size: 11px; font-weight: 600; color: #fff;">VSync</span>
+                <label class="switch">
+                  <input type="checkbox" id="opt-vsync">
+                  <span class="slider-switch"></span>
+                </label>
+              </div>
+              <div class="addon-control-card" style="flex: 1; display: flex; justify-content: space-between; align-items: center; margin-top: 0; padding: 10px 12px; box-sizing: border-box;">
+                <span style="font-size: 11px; font-weight: 600; color: #fff;">Fullscreen</span>
+                <label class="switch">
+                  <input type="checkbox" id="opt-fullscreen">
+                  <span class="slider-switch"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Resource Packs Checklist -->
+            <div id="resourcepacks-container" style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 5px; width: 100%; box-sizing: border-box;">
+              <p style="font-size: 11px; font-weight: 700; color: #fff; margin-bottom: 2px; text-align: left;">Active Resource Packs:</p>
+              <div id="resourcepacks-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; width: 100%; box-sizing: border-box; padding-right: 5px;">
+                <!-- Dynamically populated resource packs checklist -->
+              </div>
+            </div>
           </div>
 
-          <!-- FOV -->
-          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <label style="font-size: 11px; font-weight: 700; color: #fff;">FOV</label>
-              <span id="opt-fov-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">70 (Normal)</span>
-            </div>
-            <input type="range" id="opt-fov" min="30" max="110" step="1" value="70" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
-          </div>
-
-          <!-- Mouse Sensitivity -->
-          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <label style="font-size: 11px; font-weight: 700; color: #fff;">Mouse Sensitivity</label>
-              <span id="opt-sensitivity-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100% (Normal)</span>
-            </div>
-            <input type="range" id="opt-sensitivity" min="0" max="200" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
-          </div>
-
-          <!-- Master Volume -->
-          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <label style="font-size: 11px; font-weight: 700; color: #fff;">Master Volume</label>
-              <span id="opt-master-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100%</span>
-            </div>
-            <input type="range" id="opt-master" min="0" max="100" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
-          </div>
-
-          <!-- Music Volume -->
-          <div class="form-group" style="display: flex; flex-direction: column; gap: 5px; width: 100%;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-              <label style="font-size: 11px; font-weight: 700; color: #fff;">Music Volume</label>
-              <span id="opt-music-val" style="font-size: 11px; color: var(--primary); font-weight: bold;">100%</span>
-            </div>
-            <input type="range" id="opt-music" min="0" max="100" step="1" value="100" style="width: 100%; accent-color: var(--primary); background: rgba(255,255,255,0.1); border-radius: 4px; height: 5px; outline: none; cursor: pointer;">
-          </div>
-
-          <!-- Toggles (VSync & Fullscreen) -->
-          <div style="display: flex; justify-content: space-between; gap: 15px; width: 100%; box-sizing: border-box;">
-            <div class="addon-control-card" style="flex: 1; display: flex; justify-content: space-between; align-items: center; margin-top: 0; padding: 10px 12px; box-sizing: border-box;">
-              <span style="font-size: 11px; font-weight: 600; color: #fff;">VSync</span>
-              <label class="switch">
-                <input type="checkbox" id="opt-vsync">
-                <span class="slider-switch"></span>
-              </label>
-            </div>
-            <div class="addon-control-card" style="flex: 1; display: flex; justify-content: space-between; align-items: center; margin-top: 0; padding: 10px 12px; box-sizing: border-box;">
-              <span style="font-size: 11px; font-weight: 600; color: #fff;">Fullscreen</span>
-              <label class="switch">
-                <input type="checkbox" id="opt-fullscreen">
-                <span class="slider-switch"></span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Resource Packs Checklist -->
-          <div id="resourcepacks-container" style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 5px; width: 100%; box-sizing: border-box;">
-            <p style="font-size: 11px; font-weight: 700; color: #fff; margin-bottom: 2px; text-align: left;">Active Resource Packs:</p>
-            <div id="resourcepacks-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto; width: 100%; box-sizing: border-box; padding-right: 5px;">
-              <!-- Dynamically populated resource packs checklist -->
-            </div>
+          <!-- Not installed message -->
+          <div id="opt-not-installed-message" style="display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 40px 15px; color: rgba(255,255,255,0.4); font-size: 11px; background: rgba(0,0,0,0.15); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; width: 100%; box-sizing: border-box; margin: 10px 0;">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.75;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+            <span style="font-weight: 600; color: #fff; font-size: 12px;">Modpack Not Installed</span>
+            <span style="max-width: 240px; line-height: 1.4; color: rgba(255,255,255,0.4);">Please install the modpack first to access and customize Minecraft game settings.</span>
           </div>
         </div>
       </div>
