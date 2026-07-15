@@ -137,7 +137,7 @@ function createWindow() {
   });
 
   log('info', 'Launcher started successfully');
-  log('info', `Version: 1.0.0 | Platform: ${process.platform}`);
+  log('info', `Version: ${app.getVersion()} | Platform: ${process.platform}`);
   log('info', `Electron: ${process.versions.electron} | Node: ${process.versions.node}`);
 }
 
