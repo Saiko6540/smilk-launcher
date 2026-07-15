@@ -223,9 +223,27 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders) || false;
 
   if (localConfig && localConfig.version === remoteConfig.version) {
+    // Backport missing versionId/commitMessage metadata retroactively
+    let configUpdated = false;
+    if (remoteConfig.commitMessage && localConfig.commitMessage !== remoteConfig.commitMessage) {
+      localConfig.commitMessage = remoteConfig.commitMessage;
+      configUpdated = true;
+    }
+    if (remoteConfig.commitMessage && !localConfig.packVersion) {
+      const cleanVerMatch = remoteConfig.commitMessage.trim().match(/^v?(\d+\.\d+(?:\.\d+)?)$/i);
+      if (cleanVerMatch) {
+        localConfig.packVersion = cleanVerMatch[1];
+        configUpdated = true;
+      }
+    }
+    if (configUpdated) {
+      fs.writeFileSync(localVersionFile, JSON.stringify(localConfig, null, 2), 'utf8');
+      console.log(`Retroactively updated local config metadata for ${packKey}`);
+    }
+
     if (localShaders === targetShaders) {
       console.log(`${packKey} is up to date (${localConfig.version})`);
-      sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.version})`, config: localConfig });
+      sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)})`, config: localConfig });
       return localConfig;
     } else {
       // Version matches, but shaders state has changed! Let's do an incremental update.
@@ -283,7 +301,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
       localConfig.addons.shaders = targetShaders;
       fs.writeFileSync(localVersionFile, JSON.stringify(localConfig, null, 2), 'utf8');
 
-      sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.version})`, config: localConfig });
+      sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)})`, config: localConfig });
       return localConfig;
     }
   }
@@ -431,6 +449,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   // Write new local version config
   const finalConfig = {
     version: remoteConfig.version,
+    packVersion: indexJson.versionId || '1.0.0',
     commitMessage: remoteConfig.commitMessage,
     minecraft: remoteConfig.minecraft || indexJson.dependencies.minecraft,
     loader: remoteConfig.loader || (indexJson.dependencies['fabric-loader'] ? `fabric-${indexJson.dependencies['fabric-loader']}` : `forge-${indexJson.dependencies['forge']}`),
@@ -441,7 +460,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   };
 
   fs.writeFileSync(localVersionFile, JSON.stringify(finalConfig, null, 2), 'utf8');
-  sendProgress({ status: 'ready', message: `Ready to play (v${finalConfig.version})`, config: finalConfig });
+  sendProgress({ status: 'ready', message: `Ready to play (v${finalConfig.packVersion || finalConfig.version.substring(0, 7)})`, config: finalConfig });
 
   return finalConfig;
 }

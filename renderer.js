@@ -1971,7 +1971,15 @@ async function updateVersionCheck() {
       statLocalVerEl.textContent = 'Not Installed';
       btnText.textContent = 'INSTALL';
     } else {
-      statLocalVerEl.textContent = info.commitMessage ? info.commitMessage : `v${info.localVersion.substring(0, 7)}`;
+      let displayVer = '';
+      if (info.packVersion) {
+        displayVer = `v${info.packVersion}`;
+      } else if (info.commitMessage) {
+        displayVer = info.commitMessage;
+      } else {
+        displayVer = `v${info.localVersion.substring(0, 7)}`;
+      }
+      statLocalVerEl.textContent = displayVer;
       if (info.mcVersion) statMcVerEl.textContent = info.mcVersion;
       btnText.textContent = 'PLAY';
     }
@@ -2788,7 +2796,7 @@ playBtn.addEventListener('click', async () => {
     progressFill.style.width = '0%';
     progressPercentage.textContent = '0%';
     progressStatus.textContent = 'Launching client...';
-    btnText.textContent = 'LAUNCHING';
+    btnText.textContent = 'WAIT...';
 
     const launchRes = await window.api.startLaunch(activePack);
     if (!launchRes.success) {
@@ -2829,7 +2837,15 @@ window.api.onUpdateStatus((data) => {
     progressPercentage.textContent = '100%';
     // update local tag
     if (data.config) {
-      statLocalVerEl.textContent = data.config.commitMessage ? data.config.commitMessage : `v${data.config.version.substring(0, 7)}`;
+      let displayVer = '';
+      if (data.config.packVersion) {
+        displayVer = `v${data.config.packVersion}`;
+      } else if (data.config.commitMessage) {
+        displayVer = data.config.commitMessage;
+      } else {
+        displayVer = `v${data.config.version.substring(0, 7)}`;
+      }
+      statLocalVerEl.textContent = displayVer;
       if (data.config.minecraft) statMcVerEl.textContent = data.config.minecraft;
     }
   }

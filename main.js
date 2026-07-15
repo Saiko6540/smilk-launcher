@@ -661,19 +661,73 @@ ipcMain.handle('check-updates', async (event, packKey) => {
   if (!pack) throw new Error('Unknown modpack');
 
   let localVersion = 'none';
+  let packVersion = null;
   let commitMessage = null;
   let mcVersion = null;
+  let localConfig = null;
+
   if (fs.existsSync(localVersionFile)) {
     try {
-      const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
+      localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
       localVersion = localConfig.version;
+      packVersion = localConfig.packVersion;
       commitMessage = localConfig.commitMessage;
       mcVersion = localConfig.minecraft;
     } catch (e) { }
   }
 
+  // Retroactive metadata fetch if version is present but user-facing version info is missing
+  if (localConfig && !packVersion && !commitMessage) {
+    const configUrl = pack.configUrl;
+    if (configUrl && (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com'))) {
+      try {
+        const repoMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)/);
+        if (repoMatch) {
+          const [_, owner, repo, branch, filepath] = repoMatch;
+          const safeBranch = encodeURIComponent(decodeURIComponent(branch));
+          const safePath = encodeURIComponent(decodeURIComponent(filepath));
+          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${safePath}&sha=${safeBranch}&page=1&per_page=1`;
+          
+          const https = require('https');
+          const apiText = await new Promise((resolve, reject) => {
+            const req = https.get(apiUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(data));
+            });
+            req.on('error', reject);
+            req.setTimeout(3000, () => {
+              req.destroy();
+              reject(new Error('Timeout'));
+            });
+          });
+          const json = JSON.parse(apiText);
+          if (json && json.length > 0 && json[0].commit) {
+            const remoteCommitMsg = json[0].commit.message;
+            if (remoteCommitMsg) {
+              commitMessage = remoteCommitMsg;
+              localConfig.commitMessage = remoteCommitMsg;
+              
+              const cleanVerMatch = remoteCommitMsg.trim().match(/^v?(\d+\.\d+(?:\.\d+)?)$/i);
+              if (cleanVerMatch) {
+                packVersion = cleanVerMatch[1];
+                localConfig.packVersion = cleanVerMatch[1];
+              }
+              
+              fs.writeFileSync(localVersionFile, JSON.stringify(localConfig, null, 2), 'utf8');
+              console.log(`Resolved missing commitMessage/packVersion retroactively for ${packKey} via API: ${remoteCommitMsg}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed background metadata resolution for ${packKey}:`, err.message);
+      }
+    }
+  }
+
   return {
     localVersion,
+    packVersion,
     commitMessage,
     mcVersion,
     remoteVersion: 'Checking...', // Will check via start-update
