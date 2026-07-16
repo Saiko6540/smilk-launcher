@@ -113,6 +113,90 @@ const packSettingsSave = document.getElementById('pack-settings-save');
 const websiteBtn = document.getElementById('website-btn');
 const debugBtn = document.getElementById('debug-btn');
 
+// Custom Modal Dialog System
+const customDialogModal = document.getElementById('custom-dialog-modal');
+const customDialogTitle = document.getElementById('custom-dialog-title');
+const customDialogIcon = document.getElementById('custom-dialog-icon');
+const customDialogDesc = document.getElementById('custom-dialog-desc');
+const customDialogCancel = document.getElementById('custom-dialog-cancel');
+const customDialogConfirm = document.getElementById('custom-dialog-confirm');
+const customDialogClose = document.getElementById('custom-dialog-close');
+
+function showCustomDialog(options) {
+  return new Promise((resolve) => {
+    if (!customDialogModal) return resolve(false);
+
+    customDialogTitle.textContent = options.title || 'Notification';
+    customDialogDesc.textContent = options.message || '';
+    
+    // Set theme and icon
+    customDialogTitle.style.color = '#fff';
+    customDialogConfirm.style.background = 'linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%)';
+    if (options.type === 'error') {
+      customDialogTitle.style.color = '#ff4757';
+      customDialogIcon.textContent = '❌';
+      customDialogIcon.style.filter = 'drop-shadow(0 0 15px rgba(255, 71, 87, 0.45))';
+      customDialogConfirm.style.background = 'linear-gradient(135deg, #ff4757 0%, #ff6b81 100%)';
+    } else if (options.type === 'warning') {
+      customDialogTitle.style.color = '#ffa502';
+      customDialogIcon.textContent = '⚠️';
+      customDialogIcon.style.filter = 'drop-shadow(0 0 15px rgba(255, 165, 2, 0.45))';
+      customDialogConfirm.style.background = 'linear-gradient(135deg, #ffa502 0%, #ff7f50 100%)';
+    } else if (options.type === 'success') {
+      customDialogTitle.style.color = '#2cd63b';
+      customDialogIcon.textContent = '✅';
+      customDialogIcon.style.filter = 'drop-shadow(0 0 15px rgba(44, 214, 59, 0.45))';
+      customDialogConfirm.style.background = 'linear-gradient(135deg, #2cd63b 0%, #218c32 100%)';
+    } else {
+      customDialogIcon.textContent = '💬';
+      customDialogIcon.style.filter = 'drop-shadow(0 0 15px rgba(255, 255, 255, 0.2))';
+    }
+
+    // Configure buttons
+    if (options.showCancel) {
+      customDialogCancel.style.display = 'inline-block';
+      customDialogCancel.textContent = options.cancelText || 'Cancel';
+    } else {
+      customDialogCancel.style.display = 'none';
+    }
+    
+    customDialogConfirm.textContent = options.confirmText || 'OK';
+
+    // Show modal
+    customDialogModal.classList.remove('hidden');
+
+    // Setup event listeners
+    const cleanup = () => {
+      customDialogConfirm.onclick = null;
+      customDialogCancel.onclick = null;
+      customDialogClose.onclick = null;
+      customDialogModal.classList.add('hidden');
+    };
+
+    customDialogConfirm.onclick = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    customDialogCancel.onclick = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    customDialogClose.onclick = () => {
+      cleanup();
+      resolve(false);
+    };
+  });
+}
+
+window.showCustomAlert = function(message, type = 'info', title = 'Notification') {
+  return showCustomDialog({ message, type, title, showCancel: false });
+};
+
+window.showCustomConfirm = function(message, title = 'Confirmation', type = 'warning', confirmText = 'Confirm') {
+  return showCustomDialog({ message, type, title, showCancel: true, confirmText });
+};
 // Active Launcher State
 let activePack = 'cobblemon';
 let activeTheme = 'theme-cobblemon';
@@ -1969,7 +2053,9 @@ async function updateVersionCheck() {
     const info = await window.api.checkUpdates(activePack);
     if (info.localVersion === 'none') {
       statLocalVerEl.textContent = 'Not Installed';
-      btnText.textContent = 'INSTALL';
+      if (launcherState === 'ready' || launcherState === 'error') {
+        btnText.textContent = 'INSTALL';
+      }
     } else {
       let displayVer = '';
       if (info.packVersion) {
@@ -1981,12 +2067,16 @@ async function updateVersionCheck() {
       }
       statLocalVerEl.textContent = displayVer;
       if (info.mcVersion) statMcVerEl.textContent = info.mcVersion;
-      btnText.textContent = 'PLAY';
+      if (launcherState === 'ready' || launcherState === 'error') {
+        btnText.textContent = 'PLAY';
+      }
     }
   } catch (err) {
     console.error('Update check failed:', err);
     statLocalVerEl.textContent = 'Error Checking';
-    btnText.textContent = 'PLAY (OFFLINE)';
+    if (launcherState === 'ready' || launcherState === 'error') {
+      btnText.textContent = 'PLAY (OFFLINE)';
+    }
   }
 }
 
@@ -2073,7 +2163,7 @@ async function saveSettingsData() {
     // Re-verify update checker
     updateVersionCheck();
   } else {
-    alert(`Failed to save settings: ${res.error}`);
+    await showCustomAlert(`Failed to save settings: ${res.error}`, 'error', 'Error');
   }
 }
 
@@ -2171,13 +2261,13 @@ browseJavaBtn.addEventListener('click', async () => {
 settingsSaveBtn.addEventListener('click', saveSettingsData);
 
 settingsResetBtn.addEventListener('click', async () => {
-  if (confirm('Are you sure you want to reset all launcher settings to default?')) {
+  if (await showCustomConfirm('Are you sure you want to reset all launcher settings to default?', 'Reset Settings', 'warning', 'Reset')) {
     const res = await window.api.resetSettings();
     if (res.success) {
-      alert('Settings reset successfully!');
+      await showCustomAlert('Settings reset successfully!', 'success', 'Success');
       loadSettings(); // Reload defaults into UI
     } else {
-      alert('Failed to reset settings: ' + res.error);
+      await showCustomAlert('Failed to reset settings: ' + res.error, 'error', 'Error');
     }
   }
 });
@@ -2439,13 +2529,13 @@ async function loadInstalledShaders(packKey) {
     deleteBtn.onmouseout = () => deleteBtn.style.color = 'rgba(255,255,255,0.3)';
 
     deleteBtn.onclick = async () => {
-      if (confirm(`Are you sure you want to delete "${shader}"?`)) {
+      if (await showCustomConfirm(`Are you sure you want to delete "${shader}"?`, 'Delete Shader', 'warning', 'Delete')) {
         deleteBtn.disabled = true;
         const res = await window.api.deleteShaderpack(packKey, shader);
         if (res && res.success) {
           loadInstalledShaders(packKey);
         } else {
-          alert('Failed to delete: ' + (res ? res.error : 'Unknown error'));
+          await showCustomAlert('Failed to delete: ' + (res ? res.error : 'Unknown error'), 'error', 'Error');
           deleteBtn.disabled = false;
         }
       }
@@ -2732,21 +2822,68 @@ if (packSettingsSave) {
         if (shadersDropzoneStatus) shadersDropzoneStatus.style.display = 'none';
         updateVersionCheck();
       } else {
-        alert('Failed to save settings: ' + res.error);
+        await showCustomAlert('Failed to save settings: ' + res.error, 'error', 'Error');
+      }
+    }
+  });
+}
+
+const packSettingsResetBtn = document.getElementById('pack-settings-reset');
+const packSettingsDeleteBtn = document.getElementById('pack-settings-delete');
+
+if (packSettingsResetBtn) {
+  packSettingsResetBtn.addEventListener('click', async () => {
+    if (editingPackSettings) {
+      if (await showCustomConfirm('Reset all options of this modpack to default?', 'Reset Modpack Settings', 'warning', 'Reset')) {
+        packSettingsResetBtn.disabled = true;
+        packSettingsResetBtn.textContent = 'Clearing...';
+        const res = await window.api.resetPackSettings(editingPackSettings);
+        packSettingsResetBtn.disabled = false;
+        packSettingsResetBtn.textContent = 'Reset Options';
+        if (res.success) {
+          await showCustomAlert('Modpack options have been reset to default. Please reopen the menu.', 'success', 'Success');
+          if (packSettingsModal) packSettingsModal.classList.add('hidden');
+          if (configSettings.addons && configSettings.addons[editingPackSettings]) {
+            delete configSettings.addons[editingPackSettings];
+          }
+        } else {
+          await showCustomAlert('Failed to reset: ' + res.error, 'error', 'Error');
+        }
+      }
+    }
+  });
+}
+
+if (packSettingsDeleteBtn) {
+  packSettingsDeleteBtn.addEventListener('click', async () => {
+    if (editingPackSettings) {
+      if (await showCustomConfirm('WARNING! This will completely delete the installed modpack files. Continue?', 'Delete Modpack', 'error', 'Delete')) {
+        packSettingsDeleteBtn.disabled = true;
+        packSettingsDeleteBtn.textContent = 'Deleting...';
+        const res = await window.api.deletePack(editingPackSettings);
+        packSettingsDeleteBtn.disabled = false;
+        packSettingsDeleteBtn.textContent = 'Delete Modpack';
+        if (res.success) {
+          await showCustomAlert('Modpack deleted successfully.', 'success', 'Success');
+          if (packSettingsModal) packSettingsModal.classList.add('hidden');
+          updateVersionCheck();
+        } else {
+          await showCustomAlert('Failed to delete modpack: ' + res.error, 'error', 'Error');
+        }
       }
     }
   });
 }
 
 settingsClearBtn.addEventListener('click', async () => {
-  if (confirm('WARNING! This will delete ALL downloaded modpacks, mods, and game files. Are you completely sure?')) {
+  if (await showCustomConfirm('WARNING! This will delete ALL downloaded modpacks, mods, and game files. Are you completely sure?', 'Clear Game Data', 'error', 'Delete All')) {
     settingsClearBtn.disabled = true;
     settingsClearBtn.textContent = 'Deleting...';
     const res = await window.api.clearInstances();
     if (res.success) {
-      alert('All game versions deleted successfully. They will be re-downloaded on next launch.');
+      await showCustomAlert('All game versions deleted successfully. They will be re-downloaded on next launch.', 'success', 'Success');
     } else {
-      alert('Failed to delete game versions: ' + res.error);
+      await showCustomAlert('Failed to delete game versions: ' + res.error, 'error', 'Error');
     }
     settingsClearBtn.disabled = false;
     settingsClearBtn.textContent = 'Delete All Game Versions';
@@ -2779,6 +2916,7 @@ playBtn.addEventListener('click', async () => {
   // Go to updating process
   launcherState = 'updating';
   playBtn.disabled = true;
+  btnText.textContent = 'UPDATING...';
   progressContainer.classList.remove('hidden');
   progressFill.style.width = '0%';
   progressPercentage.textContent = '0%';
@@ -2800,6 +2938,13 @@ playBtn.addEventListener('click', async () => {
 
     const launchRes = await window.api.startLaunch(activePack);
     if (!launchRes.success) {
+      if (launchRes.javaError) {
+        launcherState = 'error';
+        playBtn.disabled = false;
+        progressContainer.classList.add('hidden');
+        btnText.textContent = 'PLAY';
+        return;
+      }
       throw new Error(launchRes.error);
     }
   } catch (err) {
@@ -2812,7 +2957,7 @@ playBtn.addEventListener('click', async () => {
     if (configSettings.mockMode) {
       window.api.openConsoleWindow();
     }
-    alert(`Launch aborted: ${err.message}`);
+    await showCustomAlert(`Launch aborted: ${err.message}`, 'error', 'Launch Failed');
   }
 });
 
@@ -2930,7 +3075,7 @@ window.api.onLaunchStatus((data) => {
           uploadBtn.style.background = '#27ae60'; // Green
         }
       } catch (err) {
-        alert('Failed to upload log: ' + err.message);
+        await showCustomAlert('Failed to upload log: ' + err.message, 'error', 'Upload Failed');
         uploadBtn.textContent = 'Upload Log to Web';
         uploadBtn.disabled = false;
       }
@@ -2975,6 +3120,36 @@ window.api.onLaunchStatus((data) => {
     const javaManualBtn = document.getElementById('java-manual-btn');
     const javaCloseBtn = document.getElementById('java-modal-close');
     
+    const javaHeader = document.getElementById('java-error-header');
+    const javaErrorBox = document.getElementById('java-error-box');
+    const javaIcon = javaErrorBox ? javaErrorBox.querySelector('svg') : null;
+    
+    if (data.message.toLowerCase().includes('requires java') || data.message.toLowerCase().includes('are using java')) {
+      if (javaHeader) {
+        javaHeader.textContent = 'Java Update Required';
+        javaHeader.style.color = '#ffa502';
+      }
+      if (javaErrorBox) {
+        javaErrorBox.style.background = 'rgba(255, 165, 2, 0.08)';
+        javaErrorBox.style.borderColor = 'rgba(255, 165, 2, 0.2)';
+      }
+      if (javaIcon) {
+        javaIcon.setAttribute('stroke', '#ffa502');
+      }
+    } else {
+      if (javaHeader) {
+        javaHeader.textContent = 'Java Not Found';
+        javaHeader.style.color = '#ff4757';
+      }
+      if (javaErrorBox) {
+        javaErrorBox.style.background = 'rgba(255, 71, 87, 0.08)';
+        javaErrorBox.style.borderColor = 'rgba(255, 71, 87, 0.2)';
+      }
+      if (javaIcon) {
+        javaIcon.setAttribute('stroke', '#ff4757');
+      }
+    }
+
     javaDesc.textContent = data.message;
     
     javaCloseBtn.onclick = () => {
@@ -2982,29 +3157,64 @@ window.api.onLaunchStatus((data) => {
     };
     
     javaManualBtn.onclick = () => {
-      window.api.openWebsite(); // Or we can add an openUrl IPC, but they can just go to the discord or oracle
-      // Let's actually add a quick fetch to open Adoptium:
-      const electron = require('electron'); // Wait, renderer doesn't have require if contextIsolation is true!
-      // I'll just use window.open since electron intercepts it sometimes, or just tell them to use settings.
       window.open('https://adoptium.net/');
     };
     
     javaAutoBtn.onclick = async () => {
-      document.getElementById('java-modal-footer').classList.add('hidden');
+      const javaModalFooter = document.getElementById('java-modal-footer');
+      javaModalFooter.classList.add('hidden');
       document.getElementById('java-download-progress').classList.remove('hidden');
       try {
         const result = await window.api.installJava(data.requiredVersion);
         if (result && result.success) {
-          javaModal.classList.add('hidden');
           if (settingsJava) settingsJava.value = result.javaPath;
-          alert('Java installed successfully! You can now launch the game.');
+          
+          document.getElementById('java-download-progress').classList.add('hidden');
+          if (javaHeader) {
+            javaHeader.textContent = 'Java Installed!';
+            javaHeader.style.color = '#2cd63b';
+          }
+          if (javaErrorBox) {
+            javaErrorBox.style.background = 'rgba(44, 214, 59, 0.08)';
+            javaErrorBox.style.borderColor = 'rgba(44, 214, 59, 0.2)';
+          }
+          if (javaIcon) {
+            javaIcon.setAttribute('stroke', '#2cd63b');
+            javaIcon.innerHTML = '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>';
+          }
+          javaDesc.textContent = `Java ${data.requiredVersion} was successfully installed! Click Close and press PLAY to start the game.`;
+          
+          javaModalFooter.classList.remove('hidden');
+          javaManualBtn.style.display = 'none';
+          javaAutoBtn.textContent = 'Close';
+          javaAutoBtn.style.background = 'linear-gradient(135deg, #2cd63b 0%, #218c32 100%)';
+          javaAutoBtn.onclick = () => {
+            javaModal.classList.add('hidden');
+            // reset button to defaults
+            javaManualBtn.style.display = 'block';
+            javaAutoBtn.textContent = 'Install Automatically';
+            javaAutoBtn.style.background = 'linear-gradient(135deg, #44bd32 0%, #27ae60 100%)';
+            if (javaIcon) javaIcon.innerHTML = '<circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16">';
+          };
         } else {
           throw new Error('Installation failed without throwing an error');
         }
       } catch (e) {
-        alert('Failed to automatically download Java: ' + e.message);
-        document.getElementById('java-modal-footer').classList.remove('hidden');
         document.getElementById('java-download-progress').classList.add('hidden');
+        javaModalFooter.classList.remove('hidden');
+        if (javaHeader) {
+          javaHeader.textContent = 'Installation Failed';
+          javaHeader.style.color = '#ff4757';
+        }
+        if (javaErrorBox) {
+          javaErrorBox.style.background = 'rgba(255, 71, 87, 0.08)';
+          javaErrorBox.style.borderColor = 'rgba(255, 71, 87, 0.2)';
+        }
+        if (javaIcon) {
+          javaIcon.setAttribute('stroke', '#ff4757');
+          javaIcon.innerHTML = '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>';
+        }
+        javaDesc.textContent = `Failed to automatically download Java: ${e.message}. Please try manual installation.`;
       }
     };
     

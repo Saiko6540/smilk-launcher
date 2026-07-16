@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('api', {
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
   resetSettings: () => ipcRenderer.invoke('reset-settings'),
   clearInstances: () => ipcRenderer.invoke('clear-instances'),
+  resetPackSettings: (packKey) => ipcRenderer.invoke('reset-pack-settings', packKey),
+  deletePack: (packKey) => ipcRenderer.invoke('delete-pack', packKey),
   selectJavaPath: () => ipcRenderer.invoke('select-java-path'),
   checkUpdates: (packKey) => ipcRenderer.invoke('check-updates', packKey),
   startUpdate: (packKey) => ipcRenderer.invoke('start-update', packKey),

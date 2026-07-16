@@ -334,6 +334,45 @@ ipcMain.handle('clear-instances', () => {
   }
 });
 
+// Reset Pack Settings IPC
+ipcMain.handle('reset-pack-settings', (event, packKey) => {
+  try {
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+    const packDir = path.join(instancesDir, packKey);
+    const optionsPath = path.join(packDir, '.minecraft', 'options.txt');
+    if (fs.existsSync(optionsPath)) {
+      fs.unlinkSync(optionsPath);
+    }
+    
+    // Also remove shaders and other addon settings from global config
+    if (fs.existsSync(settingsPath)) {
+      const data = fs.readFileSync(settingsPath, 'utf-8');
+      const settings = JSON.parse(data);
+      if (settings.addons && settings.addons[packKey]) {
+        delete settings.addons[packKey];
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      }
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+// Delete Pack IPC
+ipcMain.handle('delete-pack', (event, packKey) => {
+  try {
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+    const packDir = path.join(instancesDir, packKey);
+    if (fs.existsSync(packDir)) {
+      fs.rmSync(packDir, { recursive: true, force: true });
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
 // Select Java path via file dialog
 ipcMain.handle('select-java-path', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
