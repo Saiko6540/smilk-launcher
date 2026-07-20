@@ -136,3 +136,6 @@ game_data/
 launcher.log
 settings.json
 classpath*.log
+
+# Ignore local agents folder
+.agents/

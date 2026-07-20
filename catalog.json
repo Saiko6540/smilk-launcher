@@ -1,0 +1,50 @@
+[
+  {
+    "id": "cobblemon",
+    "branch": "cobblemon",
+    "title": "Cobblemon Adventure",
+    "description": "Catch 'em all in Minecraft! A modpack combining the best of Pokémon and Minecraft, with optimized performance and beautiful biomes.",
+    "tags": ["survival", "adventure", "pokemon"],
+    "mrpacks": [
+      "modpack_test_1.0.0.mrpack"
+    ],
+    "bannerUrl": null,
+    "backgroundUrl": null
+  },
+  {
+    "id": "createplus",
+    "branch": "createplus",
+    "title": "Create+",
+    "description": "A tech-focused modpack centered around the Create mod. Build massive factories, complex automation lines, and trains!",
+    "tags": ["tech", "create", "automation"],
+    "mrpacks": [
+      "modpack_test_1.0.0.mrpack"
+    ],
+    "bannerUrl": null,
+    "backgroundUrl": null
+  },
+  {
+    "id": "sea",
+    "branch": "sea",
+    "title": "Stranded at Sea",
+    "description": "Survive in the middle of an endless ocean. You'll need to scavenge resources underwater, build a raft, and fight the elements to stay alive.",
+    "tags": ["survival", "ocean", "hardcore", "create"],
+    "mrpacks": [
+      "modpack_test_1.0.0.mrpack"
+    ],
+    "bannerUrl": "https://raw.githubusercontent.com/ddidif/submarinemilkkk/sea/banner.png",
+    "backgroundUrl": "https://raw.githubusercontent.com/ddidif/submarinemilkkk/sea/background.png"
+  },
+  {
+    "id": "vanilla-plus",
+    "branch": "vanilla+",
+    "title": "Vanilla+",
+    "description": "A lightly modded Minecraft experience. Adds performance improvements, quality-of-life features, and subtle visual enhancements while keeping the core vanilla gameplay intact.",
+    "tags": ["vanilla", "survival", "optimization"],
+    "mrpacks": [
+      "Super vanilla.mrpack"
+    ],
+    "bannerUrl": null,
+    "backgroundUrl": null
+  }
+]

@@ -1889,6 +1889,13 @@ if (openInstancesBtn) {
   });
 }
 
+const settingsOpenInstancesBtn = document.getElementById('settings-open-instances-btn');
+if (settingsOpenInstancesBtn) {
+  settingsOpenInstancesBtn.addEventListener('click', () => {
+    window.api.openInstancesDir();
+  });
+}
+
 settingsClearBtn.addEventListener('click', async () => {
   if (confirm('WARNING! This will delete ALL downloaded modpacks, mods, and game files. Are you completely sure?')) {
     settingsClearBtn.disabled = true;
@@ -2280,6 +2287,7 @@ function switchInstance(instanceId) {
   const actionWidget = document.querySelector('.action-widget');
   if (actionWidget) actionWidget.style.display = 'flex';
 
+
   // Refresh active class in list
   document.querySelectorAll('.modpack-item').forEach(item => {
     item.classList.toggle('active', item.dataset.id === instanceId);
@@ -2348,20 +2356,26 @@ optDeleteInstance.addEventListener('click', async () => {
     if (confirm('Are you sure you want to delete this instance? This cannot be undone.')) {
       const instanceToDelete = contextMenuTargetId;
       
-      // We don't need to manually update configSettings or renderInstancesList here.
-      // main.js broadcasts 'settings-updated' when an instance is deleted,
-      // which will automatically update configSettings and call renderInstancesList().
-      await window.api.deleteInstance(instanceToDelete);
+      const res = await window.api.deleteInstance(instanceToDelete);
       
-      if (activePack === instanceToDelete) {
-        if (versionCheckInterval) {
-          clearInterval(versionCheckInterval);
-          versionCheckInterval = null;
+      if (res && res.success) {
+        configSettings.instances = configSettings.instances.filter(i => i.id !== instanceToDelete);
+        
+        if (activePack === instanceToDelete) {
+          if (versionCheckInterval) {
+            clearInterval(versionCheckInterval);
+            versionCheckInterval = null;
+          }
+          activePack = null;
+          activeInstanceId = null;
+          document.querySelector('.pack-display').style.display = 'none';
+          const actionWidget = document.querySelector('.action-widget');
+          if (actionWidget) actionWidget.style.display = 'none';
         }
-        activePack = null;
-        activeInstanceId = null;
-        // The pack display will either be hidden by renderInstancesList (if empty)
-        // or overwritten by the next available instance.
+        
+        renderInstancesList();
+      } else {
+        console.error('Failed to delete instance', res ? res.error : 'Unknown error');
       }
     }
   }
@@ -2451,19 +2465,33 @@ newInstanceBtn.addEventListener('click', async () => {
         btnHtml = `<button class="store-install-btn" ${pack.mrpacks.length === 0 ? 'disabled' : ''}>Install</button>`;
       }
 
+      let descHtml = pack.description;
+      let readMoreHtml = '';
+      if (pack.description && pack.description.length > 120) {
+        readMoreHtml = `<div class="store-read-more" style="color: #4ade80; font-size: 0.8rem; cursor: pointer; margin-top: 5px; font-weight: 600;">Read More</div>`;
+      }
+
       el.innerHTML = `
         <div class="store-item-banner" style="background-image: url('${pack.bannerUrl}')"></div>
         <div class="store-item-content">
           <div class="store-item-title">${pack.title}</div>
           <div class="store-item-tags">${serverStatusTag}${tagsHtml}</div>
-          <div class="store-item-desc">${pack.description}</div>
-          <div class="store-item-footer">
+          <div class="store-item-desc">${descHtml}</div>
+          ${readMoreHtml}
+          <div class="store-item-footer" style="margin-top: auto;">
             ${versionOptionsHtml}
             ${btnHtml}
           </div>
         </div>
       `;
-      
+
+      const readMoreBtn = el.querySelector('.store-read-more');
+      if (readMoreBtn) {
+        readMoreBtn.addEventListener('click', () => {
+          showCustomAlert(pack.title, pack.description, '📖');
+        });
+      }
+
       if (!isInstalled) {
         const installBtn = el.querySelector('.store-install-btn');
         if (installBtn) {
@@ -2617,3 +2645,138 @@ winCloseBtn.addEventListener('click', () => window.api.closeWindow());
 
 // Run Init
 initApp();
+
+// --- Custom Dialog System ---
+function showCustomAlert(title, message, icon = '💬') {
+  const modal = document.getElementById('custom-dialog-modal');
+  document.getElementById('custom-dialog-title').innerText = title;
+  document.getElementById('custom-dialog-desc').innerText = message;
+  document.getElementById('custom-dialog-icon').innerText = icon;
+  
+  const confirmBtn = document.getElementById('custom-dialog-confirm');
+  const cancelBtn = document.getElementById('custom-dialog-cancel');
+  
+  cancelBtn.style.display = 'none';
+  confirmBtn.onclick = () => {
+    modal.classList.add('hidden');
+  };
+  
+  modal.classList.remove('hidden');
+}
+
+function showCustomConfirm(title, message, icon, onConfirm) {
+  const modal = document.getElementById('custom-dialog-modal');
+  document.getElementById('custom-dialog-title').innerText = title;
+  document.getElementById('custom-dialog-desc').innerText = message;
+  document.getElementById('custom-dialog-icon').innerText = icon;
+  
+  const confirmBtn = document.getElementById('custom-dialog-confirm');
+  const cancelBtn = document.getElementById('custom-dialog-cancel');
+  
+  cancelBtn.style.display = 'block';
+  
+  cancelBtn.onclick = () => {
+    modal.classList.add('hidden');
+  };
+  
+  confirmBtn.onclick = () => {
+    modal.classList.add('hidden');
+    onConfirm();
+  };
+  
+  modal.classList.remove('hidden');
+}
+
+const customDialogCloseBtn = document.getElementById('custom-dialog-close');
+if (customDialogCloseBtn) {
+  customDialogCloseBtn.addEventListener('click', () => {
+    document.getElementById('custom-dialog-modal').classList.add('hidden');
+  });
+}
+
+// --- Pack Settings Logic ---
+const optPackSettingsBtn = document.getElementById('opt-pack-settings');
+const packSettingsModal = document.getElementById('pack-settings-modal');
+let settingsPackId = null;
+
+if (optPackSettingsBtn && packSettingsModal) {
+  optPackSettingsBtn.addEventListener('click', () => {
+    instanceOptionsMenu.classList.add('hidden');
+    if (!contextMenuTargetId) return;
+    settingsPackId = contextMenuTargetId;
+    
+    const instance = configSettings.instances.find(i => i.id === settingsPackId);
+    if (!instance) return;
+    
+    // Conditionally show/hide Iris toggle based on supportsIris
+    const addonCard = document.querySelector('.addon-control-card');
+    if (instance.supportsIris === false) {
+      if (addonCard) addonCard.style.display = 'none';
+    } else {
+      if (addonCard) addonCard.style.display = 'flex';
+    }
+    
+    packSettingsModal.classList.remove('hidden');
+  });
+
+  const packSettingsCloseBtn = document.getElementById('pack-settings-close');
+  if (packSettingsCloseBtn) {
+    packSettingsCloseBtn.addEventListener('click', () => {
+      packSettingsModal.classList.add('hidden');
+    });
+  }
+  
+  packSettingsModal.addEventListener('click', (e) => {
+    if (e.target === packSettingsModal) packSettingsModal.classList.add('hidden');
+  });
+
+  const packSettingsSaveBtn = document.getElementById('pack-settings-save');
+  if (packSettingsSaveBtn) {
+    packSettingsSaveBtn.addEventListener('click', () => {
+      packSettingsModal.classList.add('hidden');
+    });
+  }
+
+  // Reset Options
+  const packSettingsResetBtn = document.getElementById('pack-settings-reset');
+  if (packSettingsResetBtn) {
+    packSettingsResetBtn.addEventListener('click', () => {
+      showCustomConfirm('Reset Options?', 'Are you sure you want to reset all game settings and shaders for this modpack? This action cannot be undone.', '⚠️', async () => {
+        packSettingsModal.classList.add('hidden');
+        const res = await window.api.resetPackSettings(settingsPackId);
+        if (res.success) {
+          showCustomAlert('Reset Complete', 'Modpack settings have been reset to their defaults.', '✅');
+        } else {
+          showCustomAlert('Error', 'Failed to reset settings: ' + res.error, '❌');
+        }
+      });
+    });
+  }
+
+  // Delete Modpack
+  const packSettingsDeleteBtn = document.getElementById('pack-settings-delete');
+  if (packSettingsDeleteBtn) {
+    packSettingsDeleteBtn.addEventListener('click', () => {
+      showCustomConfirm('Delete Modpack?', 'This will permanently delete the modpack files, including all mods and worlds. Are you absolutely sure?', '🗑️', async () => {
+        packSettingsModal.classList.add('hidden');
+        const res = await window.api.deletePack(settingsPackId);
+        if (res.success) {
+          showCustomAlert('Deleted', 'Modpack successfully deleted.', '🗑️');
+          // Delete instance from config
+          configSettings.instances = configSettings.instances.filter(i => i.id !== settingsPackId);
+          await saveSettingsData();
+          if (activePack === settingsPackId) {
+            activePack = null;
+            activeInstanceId = null;
+            document.querySelector('.pack-display').style.display = 'none';
+            const actionWidget = document.querySelector('.action-widget');
+            if (actionWidget) actionWidget.style.display = 'none';
+          }
+          renderInstancesList();
+        } else {
+          showCustomAlert('Error', 'Failed to delete modpack: ' + res.error, '❌');
+        }
+      });
+    });
+  }
+}

@@ -14,7 +14,9 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "icon.png",
+      "artifactName": "smilk-Setup-${version}.${ext}"
     },
     "publish": [
       {

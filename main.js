@@ -245,6 +245,51 @@ ipcMain.handle('delete-instance', async (event, instanceId) => {
   }
 });
 
+ipcMain.handle('reset-pack-settings', async (event, packKey) => {
+  try {
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+    const packDir = path.join(instancesDir, packKey);
+    const optionsPath = path.join(packDir, '.minecraft', 'options.txt');
+    if (fs.existsSync(optionsPath)) {
+      fs.unlinkSync(optionsPath);
+    }
+    const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
+    if (settings.addons && settings.addons[packKey]) {
+      delete settings.addons[packKey];
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('delete-pack', async (event, packKey) => {
+  try {
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+    const packDir = path.join(instancesDir, packKey);
+    if (fs.existsSync(packDir)) {
+      fs.rmSync(packDir, { recursive: true, force: true });
+    }
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('get-mc-logs', async (event, packKey) => {
+  try {
+    const instancesDir = path.join(userDataPath, 'game_data', 'instances');
+    const logPath = path.join(instancesDir, packKey, '.minecraft', 'logs', 'latest.log');
+    if (fs.existsSync(logPath)) {
+      return fs.readFileSync(logPath, 'utf8');
+    }
+    return "No logs found for this modpack.";
+  } catch (e) {
+    return "Error reading logs: " + e.message;
+  }
+});
+
 ipcMain.handle('clear-instances', () => {
   try {
     const instancesDir = path.join(userDataPath, 'game_data', 'instances');
