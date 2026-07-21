@@ -4,16 +4,42 @@ const https = require('https');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
 
+const cancelledPacks = new Set();
+
+function cancelUpdate(packKey) {
+  if (packKey) cancelledPacks.add(packKey);
+}
+
+function clearCancelUpdate(packKey) {
+  if (packKey) cancelledPacks.delete(packKey);
+}
+
+function checkCancelled(packKey) {
+  if (packKey && cancelledPacks.has(packKey)) {
+    throw new Error('UPDATE_CANCELLED');
+  }
+}
+
 /**
  * Helper to download a file with progress tracking and return a Promise
  */
-function downloadFile(url, destPath, onProgress) {
+function downloadFile(url, destPath, onProgress, packKey) {
   return new Promise((resolve, reject) => {
+    if (packKey && cancelledPacks.has(packKey)) {
+      return reject(new Error('UPDATE_CANCELLED'));
+    }
+
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
     const file = fs.createWriteStream(destPath);
     let downloadedBytes = 0;
 
     const doDownload = (currentUrl) => {
+      if (packKey && cancelledPacks.has(packKey)) {
+        file.close();
+        fs.unlink(destPath, () => {});
+        return reject(new Error('UPDATE_CANCELLED'));
+      }
+
       const request = https.get(currentUrl, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           // Follow redirect
@@ -29,6 +55,13 @@ function downloadFile(url, destPath, onProgress) {
         const totalBytes = parseInt(response.headers['content-length'], 10) || 0;
 
         response.on('data', (chunk) => {
+          if (packKey && cancelledPacks.has(packKey)) {
+            request.destroy();
+            file.close();
+            fs.unlink(destPath, () => {});
+            return reject(new Error('UPDATE_CANCELLED'));
+          }
+
           downloadedBytes += chunk.length;
           file.write(chunk);
           if (onProgress && totalBytes > 0) {
@@ -115,6 +148,7 @@ async function asyncQueue(tasks, limit, onProgress) {
  * Main update routine
  */
 async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgress) {
+  clearCancelUpdate(packKey);
   console.log(`Checking updates for ${packKey} from ${configUrl}`);
   sendProgress({ status: 'checking', message: 'Checking for updates...' });
 
@@ -344,5 +378,6 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
 }
 
 module.exports = {
-  checkAndInstallUpdate
+  checkAndInstallUpdate,
+  cancelUpdate
 };

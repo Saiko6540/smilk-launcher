@@ -948,14 +948,23 @@ function initParticles() {
 function animate() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (activeTheme === 'theme-stranded') {
-    drawOceanScene();
-  } else if (activeTheme === 'theme-democky') {
-    drawDemockyScene();
-  } else if (activeTheme === 'theme-cobblemon') {
-    drawPokemonScene();
-  } else if (activeTheme === 'theme-vanilla') {
-    drawVanillaScene();
+  const hasCustomBg = !!(document.body.style.backgroundImage && document.body.style.backgroundImage !== 'none' && document.body.style.backgroundImage !== 'initial');
+
+  if (!hasCustomBg) {
+    if (activeTheme === 'theme-stranded') {
+      drawOceanScene();
+    } else if (activeTheme === 'theme-democky') {
+      drawDemockyScene();
+    } else if (activeTheme === 'theme-cobblemon') {
+      drawPokemonScene();
+    } else if (activeTheme === 'theme-vanilla') {
+      drawVanillaScene();
+    }
+  } else {
+    // Render only subtle ambient floating particles over the custom background image
+    if (typeof sparks !== 'undefined') {
+      sparks.forEach(s => { s.update(); s.draw(); });
+    }
   }
 
   requestAnimationFrame(animate);
@@ -2087,22 +2096,30 @@ window.api.onLaunchStatus((data) => {
     closeBtn.onclick = () => crashModal.classList.add('hidden');
     
     openLogsBtn.onclick = () => {
-      window.api.openInstancesDir(); // We'll just open the instances dir for now, or we can add a specific open path
+      if (activePack) {
+        window.api.openInstanceDir(activePack);
+      } else {
+        window.api.openInstancesDir();
+      }
     };
 
     uploadBtn.onclick = async () => {
       uploadBtn.textContent = 'Uploading...';
       uploadBtn.disabled = true;
       try {
-        const res = await window.api.uploadLog(data.instanceDir);
-        if (res.success) {
+        const target = data.instanceDir || activePack;
+        const res = await window.api.uploadLog(target);
+        if (res && res.success) {
           resultDiv.classList.remove('hidden');
           urlInput.value = res.url;
           uploadBtn.textContent = 'Uploaded!';
-          uploadBtn.style.background = '#27ae60'; // Green
+          uploadBtn.style.background = '#27ae60';
+          showToast('Crash log uploaded to mclo.gs!', 'success');
+        } else {
+          throw new Error(res ? res.error : 'Upload failed');
         }
       } catch (err) {
-        alert('Failed to upload log: ' + err.message);
+        showCustomAlert('Upload Failed', 'Failed to upload crash log: ' + err.message, '❌');
         uploadBtn.textContent = 'Upload Log to Web';
         uploadBtn.disabled = false;
       }
@@ -2111,6 +2128,7 @@ window.api.onLaunchStatus((data) => {
     copyBtn.onclick = () => {
       navigator.clipboard.writeText(urlInput.value);
       copyBtn.textContent = 'Copied!';
+      showToast('Log link copied to clipboard', 'info');
       setTimeout(() => copyBtn.textContent = 'Copy', 2000);
     };
 
@@ -2154,10 +2172,6 @@ window.api.onLaunchStatus((data) => {
     };
     
     javaManualBtn.onclick = () => {
-      window.api.openWebsite(); // Or we can add an openUrl IPC, but they can just go to the discord or oracle
-      // Let's actually add a quick fetch to open Adoptium:
-      const electron = require('electron'); // Wait, renderer doesn't have require if contextIsolation is true!
-      // I'll just use window.open since electron intercepts it sometimes, or just tell them to use settings.
       window.open('https://adoptium.net/');
     };
     
@@ -2168,14 +2182,14 @@ window.api.onLaunchStatus((data) => {
         const result = await window.api.installJava(data.requiredVersion);
         if (result && result.success) {
           javaModal.classList.add('hidden');
-          // Update the input field in settings if it's open
-          document.getElementById('settings-javapath').value = result.javaPath;
-          alert('Java installed successfully! You can now launch the game.');
+          const javaInput = document.getElementById('settings-java');
+          if (javaInput) javaInput.value = result.javaPath;
+          showCustomAlert('Java Installed', 'Java has been installed successfully! You can now launch the game.', '✅');
         } else {
           throw new Error('Installation failed without throwing an error');
         }
       } catch (e) {
-        alert('Failed to automatically download Java: ' + e.message);
+        showCustomAlert('Java Install Failed', 'Failed to automatically download Java: ' + e.message, '❌');
         document.getElementById('java-modal-footer').classList.remove('hidden');
         document.getElementById('java-download-progress').classList.add('hidden');
       }
@@ -2208,7 +2222,10 @@ function renderInstancesList() {
     if (actionWidget) actionWidget.style.display = 'flex';
     playBtn.disabled = true;
     btnText.textContent = 'PLAY';
-    startBackgroundCycle();
+    activePack = null;
+    activeInstanceId = null;
+    document.body.style.backgroundImage = '';
+    document.body.className = 'theme-vanilla';
     return;
   }
 
@@ -2279,11 +2296,8 @@ function renderInstancesList() {
 
 // Switch the active instance in the dashboard
 function switchInstance(instanceId) {
-  if (launcherState !== 'ready') return;
   activeInstanceId = instanceId;
   activePack = instanceId; // keep old variable for compat
-  
-  stopBackgroundCycle();
   
   const instance = configSettings.instances.find(i => i.id === instanceId);
   if (!instance) return;
@@ -2304,33 +2318,48 @@ function switchInstance(instanceId) {
   statMcVerEl.textContent = instance.mcVersion || 'Unknown';
   statLoaderEl.textContent = instance.loader || 'Unknown';
 
-  // CSS Theme Fallback
-  document.body.className = ''; // Reset themes
-  const branchLower = (instance.branch || '').toLowerCase();
-  
-  if (branchLower.includes('sea') || branchLower.includes('stranded')) {
-    document.body.classList.add('theme-stranded');
-    activeTheme = 'theme-stranded';
-  } else if (branchLower.includes('democky') || branchLower.includes('create') || branchLower.includes('plus')) {
-    document.body.classList.add('theme-democky');
-    activeTheme = 'theme-democky';
-  } else if (branchLower.includes('cobble') || branchLower.includes('pokemon')) {
-    document.body.classList.add('theme-cobblemon');
-    activeTheme = 'theme-cobblemon';
+  // CSS Theme Logic
+  if (instance.theme) {
+    document.body.className = instance.theme;
+    activeTheme = instance.theme;
   } else {
-    document.body.classList.add('theme-vanilla');
-    activeTheme = 'theme-vanilla';
+    const branchLower = (instance.branch || '').toLowerCase();
+    let matchedTheme = null;
+
+    if (branchLower.includes('sea') || branchLower.includes('stranded')) {
+      matchedTheme = 'theme-stranded';
+    } else if (branchLower.includes('democky') || branchLower.includes('create') || branchLower.includes('plus')) {
+      matchedTheme = 'theme-democky';
+    } else if (branchLower.includes('cobble') || branchLower.includes('pokemon')) {
+      matchedTheme = 'theme-cobblemon';
+    } else if (branchLower.includes('vanilla')) {
+      matchedTheme = 'theme-vanilla';
+    }
+
+    if (matchedTheme) {
+      document.body.className = matchedTheme;
+      activeTheme = matchedTheme;
+    }
+    // If no explicit theme matched (e.g. 'test' version), preserve current theme without forcing change
   }
   initParticles();
 
-  // Dynamic Background
-  if (instance.backgroundUrl) {
-    document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.6), rgba(10, 10, 12, 0.8)), url('${instance.backgroundUrl}')`;
-    document.body.style.backgroundSize = 'cover';
-    document.body.style.backgroundPosition = 'center';
-  } else {
-    document.body.style.backgroundImage = ''; // Allow CSS gradient to apply
-  }
+  // Dynamic Background Preloader
+  const repoOwner = 'ddidif';
+  const repoName = 'submarinemilkkk';
+  const effectiveBackgroundUrl = instance.backgroundUrl || `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${instance.branch}/background.png`;
+  
+  // Set immediately for instant display if cached
+  document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.65), rgba(10, 10, 12, 0.85)), url('${effectiveBackgroundUrl}')`;
+  document.body.style.backgroundSize = 'cover';
+  document.body.style.backgroundPosition = 'center';
+
+  // Preload to ensure image is fetched and applied smoothly
+  const bgImg = new Image();
+  bgImg.onload = () => {
+    document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.65), rgba(10, 10, 12, 0.85)), url('${effectiveBackgroundUrl}')`;
+  };
+  bgImg.src = effectiveBackgroundUrl;
 
   updateVersionCheck();
   checkServerStatus(instanceId);
@@ -2357,33 +2386,40 @@ optOpenFolder.addEventListener('click', () => {
 
 optDeleteInstance.addEventListener('click', async () => {
   instanceOptionsMenu.classList.add('hidden');
-  if (contextMenuTargetId) {
-    if (confirm('Are you sure you want to delete this instance? This cannot be undone.')) {
-      const instanceToDelete = contextMenuTargetId;
+  if (!contextMenuTargetId) return;
+  const instanceToDelete = contextMenuTargetId;
+
+  showCustomConfirm('Delete Instance?', 'Are you sure you want to delete this instance? All mods and world files will be removed.', '🗑️', async () => {
+    const res = await window.api.deleteInstance(instanceToDelete);
+    if (res && res.success) {
+      configSettings.instances = (configSettings.instances || []).filter(i => i.id !== instanceToDelete);
       
-      const res = await window.api.deleteInstance(instanceToDelete);
-      
-      if (res && res.success) {
-        configSettings.instances = configSettings.instances.filter(i => i.id !== instanceToDelete);
-        
-        if (activePack === instanceToDelete) {
-          if (versionCheckInterval) {
-            clearInterval(versionCheckInterval);
-            versionCheckInterval = null;
-          }
-          activePack = null;
-          activeInstanceId = null;
-          document.querySelector('.pack-display').style.display = 'none';
-          const actionWidget = document.querySelector('.action-widget');
-          if (actionWidget) actionWidget.style.display = 'none';
+      if (activePack === instanceToDelete || activeInstanceId === instanceToDelete) {
+        if (versionCheckInterval) {
+          clearInterval(versionCheckInterval);
+          versionCheckInterval = null;
         }
-        
-        renderInstancesList();
-      } else {
-        console.error('Failed to delete instance', res ? res.error : 'Unknown error');
+        activePack = null;
+        activeInstanceId = null;
+        launcherState = 'ready';
+
+        progressContainer.classList.add('hidden');
+        progressFill.style.width = '0%';
+        progressPercentage.textContent = '0%';
+        playBtn.disabled = true;
+        btnText.textContent = 'PLAY';
+
+        document.querySelector('.pack-display').style.display = 'none';
+        const actionWidget = document.querySelector('.action-widget');
+        if (actionWidget) actionWidget.style.display = 'none';
       }
+      
+      renderInstancesList();
+      showToast('Instance deleted', 'info');
+    } else {
+      showCustomAlert('Error', 'Failed to delete instance: ' + (res ? res.error : 'Unknown error'), '❌');
     }
-  }
+  });
 });
 
 // Global server status interval
@@ -2604,9 +2640,9 @@ async function installNewInstance(packData, mrpackPath, versionType) {
     mrpackPath: mrpackPath,
     versionType: versionType,
     description: packData.description,
-    iconUrl: packData.iconUrl || `https://github.com/${repoOwner}/${repoName}/raw/${packData.branch}/icon.png`,
-    bannerUrl: packData.bannerUrl,
-    backgroundUrl: packData.backgroundUrl,
+    iconUrl: packData.iconUrl || `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${packData.branch}/icon.png`,
+    bannerUrl: packData.bannerUrl || `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${packData.branch}/banner.png`,
+    backgroundUrl: packData.backgroundUrl || `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${packData.branch}/background.png`,
     mcVersion: 'Downloading...',
     loader: 'Downloading...'
   });
@@ -2867,9 +2903,21 @@ if (optPackSettingsBtn && packSettingsModal) {
           // Delete instance from config
           configSettings.instances = configSettings.instances.filter(i => i.id !== settingsPackId);
           await saveSettingsData();
-          if (activePack === settingsPackId) {
+          if (activePack === settingsPackId || activeInstanceId === settingsPackId) {
+            if (versionCheckInterval) {
+              clearInterval(versionCheckInterval);
+              versionCheckInterval = null;
+            }
             activePack = null;
             activeInstanceId = null;
+            launcherState = 'ready';
+
+            progressContainer.classList.add('hidden');
+            progressFill.style.width = '0%';
+            progressPercentage.textContent = '0%';
+            playBtn.disabled = true;
+            btnText.textContent = 'PLAY';
+
             document.querySelector('.pack-display').style.display = 'none';
             const actionWidget = document.querySelector('.action-widget');
             if (actionWidget) actionWidget.style.display = 'none';

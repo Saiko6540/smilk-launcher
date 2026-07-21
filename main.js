@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { checkAndInstallUpdate } = require('./updater');
+const { checkAndInstallUpdate, cancelUpdate } = require('./updater');
 const { launchMinecraft } = require('./launcher');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
@@ -229,6 +229,7 @@ ipcMain.handle('reset-settings', () => {
 // Clear Instances IPC
 ipcMain.handle('delete-instance', async (event, instanceId) => {
   try {
+    cancelUpdate(instanceId);
     const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
     if (fs.existsSync(instanceDir)) {
       try {
@@ -270,6 +271,7 @@ ipcMain.handle('reset-pack-settings', async (event, packKey) => {
 
 ipcMain.handle('delete-pack', async (event, packKey) => {
   try {
+    cancelUpdate(packKey);
     const instancesDir = path.join(userDataPath, 'game_data', 'instances');
     const packDir = path.join(instancesDir, packKey);
     if (fs.existsSync(packDir)) {
@@ -426,9 +428,9 @@ ipcMain.handle('start-update', async (event, instanceId) => {
     const repoOwner = 'ddidif';
     const repoName = 'submarinemilkkk';
     const configUrl = `https://github.com/${repoOwner}/${repoName}/raw/${instance.branch}/${encodeURIComponent(instance.mrpackPath)}`;
-    
+
     await checkAndInstallUpdate(instanceId, configUrl, instanceDir, sendProgress);
-    
+
     // After install, update the local settings with exact MC version / loader from local_version.json
     const localVersionFile = path.join(instanceDir, 'local_version.json');
     if (fs.existsSync(localVersionFile)) {
@@ -436,11 +438,11 @@ ipcMain.handle('start-update', async (event, instanceId) => {
       instance.mcVersion = localConfig.minecraft;
       instance.loader = localConfig.loader;
       fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-      
+
       // Notify renderer that settings updated
       if (mainWindow) mainWindow.webContents.send('settings-updated', settings);
     }
-    
+
     return { success: true };
   } catch (err) {
     sendProgress({ status: 'error', message: err.message });
@@ -708,7 +710,7 @@ ipcMain.handle('get-github-catalog', async () => {
 
   try {
     const fetch = require('node-fetch'); // Electron has fetch natively or we can use https, but Node 20+ has fetch built-in
-  } catch (e) {}
+  } catch (e) { }
 
   let catalog = [];
   try {
