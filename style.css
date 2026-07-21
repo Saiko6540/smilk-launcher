@@ -1,5 +1,16 @@
 /* Custom Minecraft Launcher Style Sheet */
 
+:root {
+  --primary: #4caf50;
+  --primary-rgb: 76, 175, 80;
+  --accent: #ffb300;
+  --accent-rgb: 255, 179, 0;
+  --bg-gradient: linear-gradient(180deg, #0d1b0e 0%, #1b3a1e 40%, #2e4a30 100%);
+  --glow: 0 0 20px rgba(76, 175, 80, 0.4);
+  --card-bg: rgba(10, 22, 10, 0.6);
+  --border-color: rgba(76, 175, 80, 0.2);
+}
+
 /* --- Theme Color Palettes --- */
 body.theme-stranded {
   --primary: #00b0ff;

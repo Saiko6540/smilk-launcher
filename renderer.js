@@ -2316,7 +2316,7 @@ function switchInstance(instanceId) {
   } else if (branchLower.includes('cobble') || branchLower.includes('pokemon')) {
     document.body.classList.add('theme-cobblemon');
     activeTheme = 'theme-cobblemon';
-  } else if (branchLower.includes('vanilla')) {
+  } else {
     document.body.classList.add('theme-vanilla');
     activeTheme = 'theme-vanilla';
   }
