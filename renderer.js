@@ -1801,8 +1801,9 @@ async function saveSettingsData() {
     topNicknameInput.value = settings.nickname;
     updateUserAvatar(settings.nickname);
     updateModeBadge(settings.mockMode);
+    showToast('Settings saved successfully!', 'success');
   } else {
-    alert(`Failed to save settings: ${res ? res.error : 'Unknown error'}`);
+    showToast(`Failed to save settings: ${res ? res.error : 'Unknown error'}`, 'error');
   }
 }
 
@@ -2389,21 +2390,154 @@ optDeleteInstance.addEventListener('click', async () => {
 let serverStatusInterval = null;
 let versionCheckInterval = null;
 
-// Store Modal Logic
+// Store Modal Logic & Real-time Filtering
+let cachedStoreCatalog = [];
+let storeActiveTag = 'All';
+let storeActiveServerBranch = null;
+
+const storeSearchInput = document.getElementById('store-search-input');
+const storeTagsBar = document.getElementById('store-tags-bar');
+
+if (storeSearchInput) {
+  storeSearchInput.addEventListener('input', () => renderFilteredStore());
+}
+
+function renderFilteredStore() {
+  if (!storeGrid) return;
+  storeGrid.innerHTML = '';
+
+  const searchTerm = (storeSearchInput ? storeSearchInput.value : '').toLowerCase().trim();
+
+  const filtered = cachedStoreCatalog.filter(pack => {
+    // Tag match
+    const matchesTag = storeActiveTag === 'All' || (pack.tags && pack.tags.includes(storeActiveTag));
+
+    // Search match
+    const matchesSearch = !searchTerm || 
+      (pack.title && pack.title.toLowerCase().includes(searchTerm)) ||
+      (pack.description && pack.description.toLowerCase().includes(searchTerm)) ||
+      (pack.tags && pack.tags.some(t => t.toLowerCase().includes(searchTerm)));
+
+    return matchesTag && matchesSearch;
+  });
+
+  if (filtered.length === 0) {
+    storeGrid.innerHTML = '<div class="store-loading">No modpacks match your search or filter.</div>';
+    return;
+  }
+
+  filtered.forEach(pack => {
+    const el = document.createElement('div');
+    el.className = 'store-item';
+    
+    const isCurrentlyOnServer = storeActiveServerBranch && pack.branch === storeActiveServerBranch;
+    const serverStatusTag = isCurrentlyOnServer ? `<span class="store-tag server">● On Server</span>` : '';
+    
+    const tagsHtml = (pack.tags || []).map(t => `<span class="store-tag">${t}</span>`).join('');
+
+    let versionOptionsHtml = '';
+    if (pack.mrpacks && pack.mrpacks.length > 0) {
+      versionOptionsHtml = `<select class="store-version-select">`;
+      pack.mrpacks.forEach(mr => {
+        const name = mr.split('/').pop().replace('.mrpack', '');
+        versionOptionsHtml += `<option value="${mr}">${name}</option>`;
+      });
+      versionOptionsHtml += `</select>`;
+    } else {
+      versionOptionsHtml = `<span style="font-size:0.8rem; color:red;">No .mrpack found</span>`;
+    }
+
+    const isInstalled = configSettings.instances && configSettings.instances.some(i => i.branch === pack.branch);
+    let btnHtml = '';
+    if (isInstalled) {
+      btnHtml = `<button class="store-install-btn" disabled style="background-color: #374151; color: rgba(255,255,255,0.4); cursor: not-allowed; box-shadow: none;">Installed</button>`;
+    } else {
+      btnHtml = `<button class="store-install-btn" ${(!pack.mrpacks || pack.mrpacks.length === 0) ? 'disabled' : ''}>Install</button>`;
+    }
+
+    let descHtml = pack.description || '';
+    let readMoreHtml = '';
+    if (descHtml.length > 120) {
+      readMoreHtml = `<div class="store-read-more" style="color: #4ade80; font-size: 0.8rem; cursor: pointer; margin-top: 5px; font-weight: 600;">Read More</div>`;
+    }
+
+    el.innerHTML = `
+      <div class="store-item-banner" style="background-image: url('${pack.bannerUrl || ''}')"></div>
+      <div class="store-item-content">
+        <div class="store-item-title">${pack.title}</div>
+        <div class="store-item-tags">${serverStatusTag}${tagsHtml}</div>
+        <div class="store-item-desc">${descHtml}</div>
+        ${readMoreHtml}
+        <div class="store-item-footer" style="margin-top: auto;">
+          ${versionOptionsHtml}
+          ${btnHtml}
+        </div>
+      </div>
+    `;
+
+    const readMoreBtn = el.querySelector('.store-read-more');
+    if (readMoreBtn) {
+      readMoreBtn.addEventListener('click', () => {
+        showCustomAlert(pack.title, pack.description, '📖');
+      });
+    }
+
+    if (!isInstalled) {
+      const installBtn = el.querySelector('.store-install-btn');
+      if (installBtn) {
+        installBtn.addEventListener('click', () => {
+          const select = el.querySelector('.store-version-select');
+          const mrpackUrl = select ? select.value : pack.mrpacks[0];
+          const versionType = select ? select.options[select.selectedIndex].text : 'Default';
+          installNewInstance(pack, mrpackUrl, versionType);
+        });
+      }
+    }
+
+    storeGrid.appendChild(el);
+  });
+}
+
+function buildStoreTagPills(catalog) {
+  if (!storeTagsBar) return;
+  storeTagsBar.innerHTML = '';
+
+  const tagSet = new Set(['All']);
+  catalog.forEach(pack => {
+    if (pack.tags && Array.isArray(pack.tags)) {
+      pack.tags.forEach(t => tagSet.add(t));
+    }
+  });
+
+  tagSet.forEach(tag => {
+    const btn = document.createElement('button');
+    btn.className = `store-tag-pill ${tag === storeActiveTag ? 'active' : ''}`;
+    btn.textContent = tag;
+    btn.addEventListener('click', () => {
+      storeActiveTag = tag;
+      storeTagsBar.querySelectorAll('.store-tag-pill').forEach(b => b.classList.toggle('active', b.textContent === tag));
+      renderFilteredStore();
+    });
+    storeTagsBar.appendChild(btn);
+  });
+}
+
 newInstanceBtn.addEventListener('click', async () => {
   storeModal.classList.remove('hidden');
   storeGrid.innerHTML = '<div class="store-loading">Loading from GitHub...</div>';
+  if (storeSearchInput) storeSearchInput.value = '';
+  storeActiveTag = 'All';
   
   try {
     const catalog = await window.api.getGithubCatalog();
-    storeGrid.innerHTML = '';
+    cachedStoreCatalog = catalog || [];
     
-    if (catalog.length === 0) {
+    if (cachedStoreCatalog.length === 0) {
       storeGrid.innerHTML = '<div class="store-loading">No modpacks found in the repository.</div>';
       return;
     }
 
-    let activeServerBranch = null;
+    storeActiveServerBranch = null;
     try {
       const serverIp = '185.206.149.27:25601';
       const controller = new AbortController();
@@ -2421,7 +2555,7 @@ newInstanceBtn.addEventListener('click', async () => {
         };
         for (const [digit, branchName] of Object.entries(digitToBranch)) {
           if (motd === digit || motd.startsWith(`${digit} `) || motd.startsWith(`[${digit}]`)) {
-            activeServerBranch = branchName;
+            storeActiveServerBranch = branchName;
             break;
           }
         }
@@ -2430,88 +2564,16 @@ newInstanceBtn.addEventListener('click', async () => {
       console.error('Failed to get live server branch for store tags:', e);
     }
 
-    if (activeServerBranch) {
-      catalog.sort((a, b) => {
-        if (a.branch === activeServerBranch && b.branch !== activeServerBranch) return -1;
-        if (a.branch !== activeServerBranch && b.branch === activeServerBranch) return 1;
+    if (storeActiveServerBranch) {
+      cachedStoreCatalog.sort((a, b) => {
+        if (a.branch === storeActiveServerBranch && b.branch !== storeActiveServerBranch) return -1;
+        if (a.branch !== storeActiveServerBranch && b.branch === storeActiveServerBranch) return 1;
         return 0;
       });
     }
 
-    catalog.forEach(pack => {
-      const el = document.createElement('div');
-      el.className = 'store-item';
-      
-      const isCurrentlyOnServer = activeServerBranch && pack.branch === activeServerBranch;
-      const serverStatusTag = isCurrentlyOnServer ? `<span class="store-tag server">● On Server</span>` : '';
-      
-      const tagsHtml = pack.tags.map(t => {
-        return `<span class="store-tag">${t}</span>`;
-      }).join('');
-
-      let versionOptionsHtml = '';
-      if (pack.mrpacks.length > 0) {
-        versionOptionsHtml = `<select class="store-version-select">`;
-        pack.mrpacks.forEach(mr => {
-          const name = mr.split('/').pop().replace('.mrpack', '');
-          versionOptionsHtml += `<option value="${mr}">${name}</option>`;
-        });
-        versionOptionsHtml += `</select>`;
-      } else {
-        versionOptionsHtml = `<span style="font-size:0.8rem; color:red;">No .mrpack found</span>`;
-      }
-
-      const isInstalled = configSettings.instances && configSettings.instances.some(i => i.branch === pack.branch);
-      let btnHtml = '';
-      if (isInstalled) {
-        btnHtml = `<button class="store-install-btn" disabled style="background-color: #555; color: rgba(255,255,255,0.5); cursor: not-allowed;">Installed</button>`;
-      } else {
-        btnHtml = `<button class="store-install-btn" ${pack.mrpacks.length === 0 ? 'disabled' : ''}>Install</button>`;
-      }
-
-      let descHtml = pack.description;
-      let readMoreHtml = '';
-      if (pack.description && pack.description.length > 120) {
-        readMoreHtml = `<div class="store-read-more" style="color: #4ade80; font-size: 0.8rem; cursor: pointer; margin-top: 5px; font-weight: 600;">Read More</div>`;
-      }
-
-      el.innerHTML = `
-        <div class="store-item-banner" style="background-image: url('${pack.bannerUrl}')"></div>
-        <div class="store-item-content">
-          <div class="store-item-title">${pack.title}</div>
-          <div class="store-item-tags">${serverStatusTag}${tagsHtml}</div>
-          <div class="store-item-desc">${descHtml}</div>
-          ${readMoreHtml}
-          <div class="store-item-footer" style="margin-top: auto;">
-            ${versionOptionsHtml}
-            ${btnHtml}
-          </div>
-        </div>
-      `;
-
-      const readMoreBtn = el.querySelector('.store-read-more');
-      if (readMoreBtn) {
-        readMoreBtn.addEventListener('click', () => {
-          showCustomAlert(pack.title, pack.description, '📖');
-        });
-      }
-
-      if (!isInstalled) {
-        const installBtn = el.querySelector('.store-install-btn');
-        if (installBtn) {
-          installBtn.addEventListener('click', () => {
-            const select = el.querySelector('.store-version-select');
-            const mrpackUrl = select ? select.value : pack.mrpacks[0];
-            const versionType = select ? select.options[select.selectedIndex].text : 'Default';
-            installNewInstance(pack, mrpackUrl, versionType);
-          });
-        }
-      }
-
-      storeGrid.appendChild(el);
-    });
-
-
+    buildStoreTagPills(cachedStoreCatalog);
+    renderFilteredStore();
 
   } catch (err) {
     storeGrid.innerHTML = `<div class="store-loading" style="color:red;">Error loading store: ${err.message}</div>`;
@@ -2704,6 +2766,27 @@ function showCustomConfirm(title, message, icon, onConfirm) {
   };
   
   modal.classList.remove('hidden');
+}
+
+// --- Toast Notification System ---
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  
+  const toast = document.createElement('div');
+  toast.className = `toast-item ${type}`;
+  
+  let icon = 'ℹ️';
+  if (type === 'success') icon = '✅';
+  if (type === 'error') icon = '❌';
+  
+  toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
 }
 
 const customDialogCloseBtn = document.getElementById('custom-dialog-close');
