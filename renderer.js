@@ -1931,9 +1931,13 @@ debugBtn.addEventListener('click', () => {
 playBtn.addEventListener('click', async () => {
   if (launcherState !== 'ready' && launcherState !== 'error') {
     if (launcherState === 'playing') {
-      // Open debug console
       window.api.openConsoleWindow();
     }
+    return;
+  }
+
+  if (!activePack) {
+    showCustomAlert('Error', 'No active modpack selected!', '⚠️');
     return;
   }
 
@@ -2615,26 +2619,41 @@ function stopBackgroundCycle() {
 
 // App Initiation
 async function initApp() {
-  initParticles();
-  animate();
-  
-  await loadSettings();
-  
-  if (!configSettings.instances) configSettings.instances = [];
-  
-  renderInstancesList();
-  
-  if (configSettings.instances.length > 0) {
-    switchInstance(configSettings.instances[0].id);
-  } else {
-    document.querySelector('.pack-display').style.display = 'none';
-    const actionWidget = document.querySelector('.action-widget');
-    if (actionWidget) actionWidget.style.display = 'flex';
-    playBtn.disabled = true;
-    btnText.textContent = 'PLAY';
+  try {
+    initParticles();
+    animate();
     
-    // Start cycling backgrounds when empty
-    startBackgroundCycle();
+    await loadSettings();
+    
+    if (!configSettings.instances) configSettings.instances = [];
+    
+    if (window.api.onSettingsUpdate) {
+      window.api.onSettingsUpdate((newSettings) => {
+        configSettings = newSettings;
+        renderInstancesList();
+        if (activeInstanceId) {
+          switchInstance(activeInstanceId);
+        }
+      });
+    }
+    
+    renderInstancesList();
+    
+    if (configSettings.instances.length > 0) {
+      switchInstance(configSettings.instances[0].id);
+    } else {
+      document.querySelector('.pack-display').style.display = 'none';
+      const actionWidget = document.querySelector('.action-widget');
+      if (actionWidget) actionWidget.style.display = 'flex';
+      playBtn.disabled = true;
+      btnText.textContent = 'PLAY';
+      
+      // Start cycling backgrounds when empty
+      startBackgroundCycle();
+    }
+  } catch (err) {
+    console.error("Critical error during initApp:", err);
+    document.body.innerHTML = `<div style="color:white; padding: 20px;"><h2>Critical Launcher Error</h2><p>${err.message}</p></div>`;
   }
 }
 

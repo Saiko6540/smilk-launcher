@@ -231,7 +231,11 @@ ipcMain.handle('delete-instance', async (event, instanceId) => {
   try {
     const instanceDir = path.join(userDataPath, 'game_data', 'instances', instanceId);
     if (fs.existsSync(instanceDir)) {
-      fs.rmSync(instanceDir, { recursive: true, force: true });
+      try {
+        fs.rmSync(instanceDir, { recursive: true, force: true });
+      } catch (err) {
+        console.error('Failed to delete instance files, they might be locked:', err);
+      }
     }
     const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
     if (settings.instances) {
@@ -269,7 +273,11 @@ ipcMain.handle('delete-pack', async (event, packKey) => {
     const instancesDir = path.join(userDataPath, 'game_data', 'instances');
     const packDir = path.join(instancesDir, packKey);
     if (fs.existsSync(packDir)) {
-      fs.rmSync(packDir, { recursive: true, force: true });
+      try {
+        fs.rmSync(packDir, { recursive: true, force: true });
+      } catch (err) {
+        console.error('Failed to delete pack files, they might be locked:', err);
+      }
     }
     return { success: true };
   } catch (e) {
