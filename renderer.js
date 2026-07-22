@@ -1795,13 +1795,22 @@ async function loadSettings() {
 
 // Settings Saving
 async function saveSettingsData() {
+  const targetId = settingsPackId || activePack || activeInstanceId;
+  const shadersToggle = document.getElementById('opt-shaders');
+  if (!configSettings.addons) configSettings.addons = {};
+  if (shadersToggle && targetId) {
+    if (!configSettings.addons[targetId]) configSettings.addons[targetId] = {};
+    configSettings.addons[targetId].shaders = shadersToggle.checked;
+  }
+
   const settings = {
     nickname: configSettings.nickname || 'Player',
     ramGb: parseInt(settingsRam.value, 10),
     javaPath: settingsJava.value.trim(),
     jvmArgs: settingsArgs.value.trim(),
     mockMode: settingsMock.checked,
-    instances: configSettings.instances || []
+    instances: configSettings.instances || [],
+    addons: configSettings.addons || {}
   };
 
   const res = await window.api.saveSettings(settings);
@@ -1836,7 +1845,7 @@ function updateModeBadge(isMock) {
 
 // Settings Modal Open/Close listeners
 settingsBtn.addEventListener('click', () => {
-  // Sync setting dialog inputs
+  switchSettingsTab('general');
   settingsModal.classList.remove('hidden');
 });
 
@@ -1876,6 +1885,31 @@ browseJavaBtn.addEventListener('click', async () => {
 settingsSaveBtn.addEventListener('click', async () => {
   settingsSaveBtn.textContent = 'Saving...';
   await saveSettingsData();
+
+  const targetId = settingsPackId || activePack || activeInstanceId;
+  if (targetId) {
+    const guiSelect = document.getElementById('opt-gui-scale');
+    const fpsSelect = document.getElementById('opt-max-fps');
+    const vsyncCheck = document.getElementById('opt-vsync');
+    const fullscreenCheck = document.getElementById('opt-fullscreen');
+
+    const shadersToggle = document.getElementById('opt-shaders');
+    const optionsObj = {
+      shaders: shadersToggle ? shadersToggle.checked : false,
+      renderDistance: parseInt(optRenderEl.value, 10),
+      fov: (parseInt(optFovEl.value, 10) - 70) / 40,
+      mouseSensitivity: parseFloat(optSensitivityEl.value) / 200,
+      guiScale: guiSelect ? parseInt(guiSelect.value, 10) : 0,
+      maxFps: fpsSelect ? parseInt(fpsSelect.value, 10) : 0,
+      soundCategory_master: parseFloat(optMasterEl.value) / 100,
+      soundCategory_music: parseFloat(optMusicEl.value) / 100,
+      enableVsync: vsyncCheck ? vsyncCheck.checked : true,
+      fullscreen: fullscreenCheck ? fullscreenCheck.checked : false
+    };
+
+    await window.api.saveGameOptions(targetId, optionsObj);
+  }
+
   settingsModal.classList.add('hidden');
   settingsSaveBtn.textContent = 'Apply Settings';
   updateVersionCheck();
@@ -1953,9 +1987,9 @@ playBtn.addEventListener('click', async () => {
 
   // Update last played timestamp and re-sort
   localStorage.setItem('lastPlayed_' + activePack, Date.now());
-  renderInstancesList();
+  const targetPack = activeInstanceId;
+  if (!targetPack) return;
 
-  // Go to updating process
   launcherState = 'updating';
   playBtn.disabled = true;
   progressContainer.classList.remove('hidden');
@@ -1963,91 +1997,130 @@ playBtn.addEventListener('click', async () => {
   progressFill.style.width = '0%';
   progressPercentage.textContent = '0%';
 
-  // We don't clear logs console here anymore because it's handled in the debug window
-
   try {
-    const res = await window.api.startUpdate(activePack);
+    const res = await window.api.startUpdate(targetPack);
+    if (activeInstanceId !== targetPack) {
+      console.log(`User switched active instance away from ${targetPack}, skipping UI update`);
+      return;
+    }
     if (!res.success) {
       throw new Error(res.error);
     }
 
     // Update successfully completed or was already updated, launch client
     launcherState = 'launching';
+    progressContainer.classList.remove('hidden');
     progressFill.style.width = '0%';
     progressPercentage.textContent = '0%';
     progressStatus.textContent = 'Launching client...';
     btnText.textContent = 'LAUNCHING';
 
-    const launchRes = await window.api.startLaunch(activePack);
+    const launchRes = await window.api.startLaunch(targetPack);
+    if (activeInstanceId !== targetPack) return;
     if (!launchRes.success) {
       throw new Error(launchRes.error);
     }
   } catch (err) {
-    launcherState = 'error';
-    playBtn.disabled = false;
-    progressContainer.classList.add('hidden');
-    btnText.textContent = 'PLAY';
-    
-    // Open debug console on error only if in Developer Mode (mockMode)
-    if (configSettings.mockMode) {
-      window.api.openConsoleWindow();
+    if (activeInstanceId === targetPack) {
+      launcherState = 'error';
+      playBtn.disabled = false;
+      progressContainer.classList.add('hidden');
+      btnText.textContent = 'PLAY';
+      alert(`Launch aborted: ${err.message}`);
     }
-    alert(`Launch aborted: ${err.message}`);
+  } finally {
+    delete activeDownloads[targetPack];
+    updateInstanceProgressBar(activeInstanceId);
   }
 });
 
 
 
+const activeDownloads = {};
+
+function updateInstanceProgressBar(instanceId) {
+  if (!instanceId || instanceId !== activeInstanceId) return;
+
+  const download = activeDownloads[instanceId];
+  if (download && download.status !== 'ready' && download.status !== 'game_started' && download.status !== 'game_running') {
+    progressContainer.classList.remove('hidden');
+    progressStatus.textContent = download.message || 'Processing...';
+    
+    if (download.status === 'error') {
+      progressStatus.style.color = '#ff4c4c';
+      progressFill.style.background = '#ff4c4c';
+      playBtn.disabled = false;
+      launcherState = 'error';
+      btnText.textContent = 'RETRY';
+    } else {
+      progressStatus.style.color = '';
+      progressFill.style.background = '';
+    }
+
+    if (typeof download.progress === 'number') {
+      progressFill.style.width = `${download.progress}%`;
+      progressPercentage.textContent = `${download.progress}%`;
+    }
+  } else {
+    progressContainer.classList.add('hidden');
+    progressFill.style.width = '0%';
+    progressPercentage.textContent = '0%';
+  }
+}
+
 // IPC Progress Update Observers
 window.api.onUpdateStatus((data) => {
   console.log('Update progress status:', data);
-  if (data.status === 'checking') {
-    progressStatus.textContent = data.message;
-    progressStatus.style.color = '';
-    progressFill.style.background = '';
-  } else if (data.status === 'downloading_pack' || data.status === 'downloading_mods') {
-    progressStatus.textContent = data.message;
-    progressFill.style.width = `${data.progress}%`;
-    progressPercentage.textContent = `${data.progress}%`;
-  } else if (data.status === 'extracting' || data.status === 'cleaning' || data.status === 'overrides') {
-    progressStatus.textContent = data.message;
-    progressFill.style.width = '100%';
-    progressPercentage.textContent = '100%';
-  } else if (data.status === 'error') {
-    progressStatus.textContent = 'Error: ' + data.message;
-    progressStatus.style.color = '#ff4c4c';
-    progressFill.style.background = '#ff4c4c';
-    playBtn.disabled = false;
-    launcherState = 'error';
-    btnText.textContent = 'RETRY';
-  } else if (data.status === 'ready') {
-    progressStatus.textContent = 'Modpack updated!';
-    progressFill.style.width = '100%';
-    progressPercentage.textContent = '100%';
-    // update local tag
-    if (data.config) {
+  const targetId = data ? (data.instanceId || activeInstanceId) : null;
+  if (!targetId) return;
+
+  if (data.status === 'ready' || data.status === 'error') {
+    delete activeDownloads[targetId];
+  } else {
+    activeDownloads[targetId] = { ...data, instanceId: targetId };
+  }
+
+  // Update local mcVersion / commitMessage tags if present
+  if (data.status === 'ready' && data.config) {
+    const inst = configSettings.instances ? configSettings.instances.find(i => i.id === targetId) : null;
+    if (inst) {
+      if (data.config.commitMessage) inst.commitMessage = data.config.commitMessage;
+      if (data.config.minecraft) inst.mcVersion = data.config.minecraft;
+    }
+    if (targetId === activeInstanceId) {
       statLocalVerEl.textContent = data.config.commitMessage ? data.config.commitMessage : `v${data.config.version.substring(0, 7)}`;
       if (data.config.minecraft) statMcVerEl.textContent = data.config.minecraft;
     }
+  }
+
+  if (targetId === activeInstanceId) {
+    updateInstanceProgressBar(activeInstanceId);
   }
 });
 
 window.api.onLaunchStatus((data) => {
   console.log('Launch progress status:', data);
-  if (data.status === 'installing_loader') {
-    progressStatus.textContent = data.message;
-  } else if (data.status === 'downloading_assets') {
-    progressStatus.textContent = data.message;
-    progressFill.style.width = `${data.progress}%`;
-    progressPercentage.textContent = `${data.progress}%`;
-  } else if (data.status === 'launching') {
-    progressStatus.textContent = data.message;
-  } else if (data.status === 'game_started') {
-    progressStatus.textContent = 'Game is running';
-    progressContainer.classList.add('hidden');
-    launcherState = 'playing';
-    playBtn.disabled = false;
-    btnText.textContent = 'PLAYING';
+  const targetId = data ? (data.instanceId || activeInstanceId) : null;
+  if (!targetId) return;
+
+  if (data.status === 'game_started' || data.status === 'game_crashed' || data.status === 'game_exited') {
+    delete activeDownloads[targetId];
+  } else {
+    activeDownloads[targetId] = { ...data, instanceId: targetId };
+  }
+
+  if (targetId === activeInstanceId) {
+    updateInstanceProgressBar(activeInstanceId);
+  }
+
+  if (data.status === 'game_started') {
+    if (targetId === activeInstanceId) {
+      progressStatus.textContent = 'Game is running';
+      progressContainer.classList.add('hidden');
+      launcherState = 'playing';
+      playBtn.disabled = false;
+      btnText.textContent = 'PLAYING';
+    }
     
     // Auto open debug console only if Developer Mode (mockMode) is enabled
     if (configSettings.mockMode) {
@@ -2061,14 +2134,14 @@ window.api.onLaunchStatus((data) => {
       if (launcherState === 'playing') {
         window.api.launcherHide();
       }
-    }, 800); // Wait for CSS transition
+    }, 800);
     
-  } else if (data.status === 'game_running') {
-    // logs go to debug console window now
   } else if (data.status === 'game_crashed') {
-    launcherState = 'ready';
-    playBtn.disabled = false;
-    updateVersionCheck();
+    if (targetId === activeInstanceId) {
+      launcherState = 'ready';
+      playBtn.disabled = false;
+      updateVersionCheck();
+    }
     
     clearTimeout(hideTimeout);
     window.api.launcherShow();
@@ -2089,11 +2162,13 @@ window.api.onLaunchStatus((data) => {
     const copyBtn = document.getElementById('crash-copy-btn');
     
     // Reset state
-    resultDiv.classList.add('hidden');
-    uploadBtn.textContent = 'Upload Log to Web';
-    uploadBtn.disabled = false;
+    if (resultDiv) resultDiv.classList.add('hidden');
+    if (uploadBtn) {
+      uploadBtn.textContent = 'Upload Log to Web';
+      uploadBtn.disabled = false;
+    }
 
-    closeBtn.onclick = () => crashModal.classList.add('hidden');
+    if (closeBtn) closeBtn.onclick = () => crashModal.classList.add('hidden');
     
     openLogsBtn.onclick = () => {
       if (activePack) {
@@ -2318,48 +2393,53 @@ function switchInstance(instanceId) {
   statMcVerEl.textContent = instance.mcVersion || 'Unknown';
   statLoaderEl.textContent = instance.loader || 'Unknown';
 
-  // CSS Theme Logic
-  if (instance.theme) {
-    document.body.className = instance.theme;
-    activeTheme = instance.theme;
-  } else {
-    const branchLower = (instance.branch || '').toLowerCase();
-    let matchedTheme = null;
-
-    if (branchLower.includes('sea') || branchLower.includes('stranded')) {
-      matchedTheme = 'theme-stranded';
-    } else if (branchLower.includes('democky') || branchLower.includes('create') || branchLower.includes('plus')) {
-      matchedTheme = 'theme-democky';
-    } else if (branchLower.includes('cobble') || branchLower.includes('pokemon')) {
-      matchedTheme = 'theme-cobblemon';
-    } else if (branchLower.includes('vanilla')) {
-      matchedTheme = 'theme-vanilla';
+  // CSS Theme & Animated Scene Logic
+  let targetTheme = instance.theme || null;
+  const textToMatch = ((instance.branch || '') + ' ' + (instance.name || '')).toLowerCase();
+  
+  if (!targetTheme) {
+    if (textToMatch.includes('sea') || textToMatch.includes('stranded')) {
+      targetTheme = 'theme-stranded';
+    } else if (textToMatch.includes('democky') || textToMatch.includes('create') || textToMatch.includes('plus')) {
+      targetTheme = 'theme-democky';
+    } else if (textToMatch.includes('cobble') || textToMatch.includes('pokemon')) {
+      targetTheme = 'theme-cobblemon';
+    } else if (textToMatch.includes('vanilla')) {
+      targetTheme = 'theme-vanilla';
     }
+  }
 
-    if (matchedTheme) {
-      document.body.className = matchedTheme;
-      activeTheme = matchedTheme;
-    }
-    // If no explicit theme matched (e.g. 'test' version), preserve current theme without forcing change
+  if (targetTheme) {
+    document.body.className = targetTheme;
+    activeTheme = targetTheme;
   }
   initParticles();
 
-  // Dynamic Background Preloader
-  const repoOwner = 'ddidif';
-  const repoName = 'submarinemilkkk';
-  const effectiveBackgroundUrl = instance.backgroundUrl || `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${instance.branch}/background.png`;
-  
-  // Set immediately for instant display if cached
-  document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.65), rgba(10, 10, 12, 0.85)), url('${effectiveBackgroundUrl}')`;
-  document.body.style.backgroundSize = 'cover';
-  document.body.style.backgroundPosition = 'center';
+  // Sync progress bar visibility for this specific instance if downloading
+  updateInstanceProgressBar(instanceId);
 
-  // Preload to ensure image is fetched and applied smoothly
-  const bgImg = new Image();
-  bgImg.onload = () => {
+  // Official theme packs have built-in animated canvas scenes (sea, democky, cobblemon, vanilla)
+  const isOfficialAnimatedPack = ['theme-stranded', 'theme-democky', 'theme-cobblemon', 'theme-vanilla'].includes(targetTheme);
+
+  if (isOfficialAnimatedPack) {
+    // Clear static background so full-screen animated canvas scene shows cleanly
+    document.body.style.backgroundImage = '';
+  } else {
+    // Dynamic Background Preloader for other custom modpacks
+    const repoOwner = 'ddidif';
+    const repoName = 'submarinemilkkk';
+    const effectiveBackgroundUrl = instance.backgroundUrl || `https://raw.githubusercontent.com/${repoOwner}/${repoName}/${instance.branch}/background.png`;
+    
     document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.65), rgba(10, 10, 12, 0.85)), url('${effectiveBackgroundUrl}')`;
-  };
-  bgImg.src = effectiveBackgroundUrl;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+
+    const bgImg = new Image();
+    bgImg.onload = () => {
+      document.body.style.backgroundImage = `linear-gradient(rgba(10, 10, 12, 0.65), rgba(10, 10, 12, 0.85)), url('${effectiveBackgroundUrl}')`;
+    };
+    bgImg.src = effectiveBackgroundUrl;
+  }
 
   updateVersionCheck();
   checkServerStatus(instanceId);
@@ -2647,6 +2727,8 @@ async function installNewInstance(packData, mrpackPath, versionType) {
     loader: 'Downloading...'
   });
   
+  activeInstanceId = instanceId;
+  activePack = instanceId;
   await saveSettingsData();
   renderInstancesList();
   switchInstance(instanceId);
@@ -2666,23 +2748,25 @@ async function installNewInstance(packData, mrpackPath, versionType) {
     if (!res.success) {
       throw new Error(res.error);
     }
-    launcherState = 'ready';
-    playBtn.disabled = false;
-    btnText.textContent = 'PLAY';
-    
-    // Hide progress bar after 2 seconds
-    setTimeout(() => {
-      if (launcherState === 'ready') {
-        progressContainer.classList.add('hidden');
-      }
-    }, 2000);
+    if (activeInstanceId === instanceId) {
+      launcherState = 'ready';
+      playBtn.disabled = false;
+      btnText.textContent = 'PLAY';
+      setTimeout(() => {
+        if (activeInstanceId === instanceId && !activeDownloads[instanceId]) {
+          progressContainer.classList.add('hidden');
+        }
+      }, 2000);
+    }
   } catch (err) {
-    launcherState = 'error';
-    playBtn.disabled = false;
-    btnText.textContent = 'RETRY';
-    progressStatus.textContent = 'Error: ' + err.message;
-    progressStatus.style.color = '#ff4c4c';
-    progressFill.style.background = '#ff4c4c';
+    if (activeInstanceId === instanceId) {
+      launcherState = 'error';
+      playBtn.disabled = false;
+      btnText.textContent = 'RETRY';
+      progressStatus.textContent = 'Error: ' + err.message;
+      progressStatus.style.color = '#ff4c4c';
+      progressFill.style.background = '#ff4c4c';
+    }
   }
 }
 
@@ -2746,8 +2830,9 @@ async function initApp() {
       playBtn.disabled = true;
       btnText.textContent = 'PLAY';
       
-      // Start cycling backgrounds when empty
-      startBackgroundCycle();
+      activePack = null;
+      activeInstanceId = null;
+      document.body.style.backgroundImage = '';
     }
   } catch (err) {
     console.error("Critical error during initApp:", err);
@@ -2832,19 +2917,159 @@ if (customDialogCloseBtn) {
   });
 }
 
-// --- Pack Settings Logic ---
-const optPackSettingsBtn = document.getElementById('opt-pack-settings');
-const packSettingsModal = document.getElementById('pack-settings-modal');
+// --- Settings Modal Tab Navigation System ---
+const tabGeneralBtn = document.getElementById('tab-general-btn');
+const tabModpackBtn = document.getElementById('tab-modpack-btn');
+const tabGeneralContent = document.getElementById('tab-general-content');
+const tabModpackContent = document.getElementById('tab-modpack-content');
 let settingsPackId = null;
 
-if (optPackSettingsBtn && packSettingsModal) {
-  optPackSettingsBtn.addEventListener('click', () => {
-    instanceOptionsMenu.classList.add('hidden');
-    if (!contextMenuTargetId) return;
-    settingsPackId = contextMenuTargetId;
+// Sliders live label listeners
+const optRenderEl = document.getElementById('opt-render');
+const optRenderValEl = document.getElementById('opt-render-val');
+if (optRenderEl && optRenderValEl) {
+  optRenderEl.addEventListener('input', () => optRenderValEl.textContent = `${optRenderEl.value} chunks`);
+}
+
+const optFovEl = document.getElementById('opt-fov');
+const optFovValEl = document.getElementById('opt-fov-val');
+if (optFovEl && optFovValEl) {
+  optFovEl.addEventListener('input', () => {
+    const val = parseInt(optFovEl.value, 10);
+    if (val === 70) optFovValEl.textContent = '70 (Normal)';
+    else if (val === 110) optFovValEl.textContent = '110 (Quake Pro)';
+    else optFovValEl.textContent = val;
+  });
+}
+
+const optSensitivityEl = document.getElementById('opt-sensitivity');
+const optSensitivityValEl = document.getElementById('opt-sensitivity-val');
+if (optSensitivityEl && optSensitivityValEl) {
+  optSensitivityEl.addEventListener('input', () => optSensitivityValEl.textContent = `${optSensitivityEl.value}%`);
+}
+
+const optMasterEl = document.getElementById('opt-master');
+const optMasterValEl = document.getElementById('opt-master-val');
+if (optMasterEl && optMasterValEl) {
+  optMasterEl.addEventListener('input', () => optMasterValEl.textContent = `${optMasterEl.value}%`);
+}
+
+const optMusicEl = document.getElementById('opt-music');
+const optMusicValEl = document.getElementById('opt-music-val');
+if (optMusicEl && optMusicValEl) {
+  optMusicEl.addEventListener('input', () => optMusicValEl.textContent = `${optMusicEl.value}%`);
+}
+
+// Shaders Help Button Toggle
+const packShadersHelpBtn = document.getElementById('pack-shaders-help-btn');
+const shadersHelpPanel = document.getElementById('shaders-help-panel');
+if (packShadersHelpBtn && shadersHelpPanel) {
+  packShadersHelpBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    shadersHelpPanel.style.display = shadersHelpPanel.style.display === 'none' ? 'flex' : 'none';
+  });
+}
+
+// Open Shaders Folder Button
+const packOpenShadersBtn = document.getElementById('pack-open-shaders-btn');
+if (packOpenShadersBtn) {
+  packOpenShadersBtn.addEventListener('click', () => {
+    const targetId = settingsPackId || activePack || activeInstanceId;
+    if (targetId) window.api.openShadersDir(targetId);
+  });
+}
+
+// Drag and Drop Shader Packs
+const shadersDropzone = document.getElementById('shaders-dropzone');
+if (shadersDropzone) {
+  shadersDropzone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    shadersDropzone.style.borderColor = 'var(--primary)';
+    shadersDropzone.style.background = 'rgba(255,255,255,0.05)';
+  });
+  shadersDropzone.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    shadersDropzone.style.borderColor = 'rgba(255,255,255,0.15)';
+    shadersDropzone.style.background = 'rgba(0,0,0,0.15)';
+  });
+  shadersDropzone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    shadersDropzone.style.borderColor = 'rgba(255,255,255,0.15)';
+    shadersDropzone.style.background = 'rgba(0,0,0,0.15)';
     
-    const instance = configSettings.instances.find(i => i.id === settingsPackId);
-    if (!instance) return;
+    const targetId = settingsPackId || activePack || activeInstanceId;
+    if (!targetId) return;
+
+    const files = Array.from(e.dataTransfer.files).filter(f => f.name.endsWith('.zip')).map(f => f.path);
+    if (files.length > 0) {
+      const res = await window.api.importShaderpack(targetId, files);
+      if (res && res.success) {
+        showToast(`Imported ${res.imported.length} shaderpack(s)!`, 'success');
+        refreshInstalledShadersList(targetId);
+      } else {
+        showToast(`Failed to import shaderpack: ${res ? res.error : 'Unknown error'}`, 'error');
+      }
+    }
+  });
+  shadersDropzone.addEventListener('click', async () => {
+    const targetId = settingsPackId || activePack || activeInstanceId;
+    if (!targetId) return;
+    const filePaths = await window.api.selectShaderpackFile();
+    if (filePaths && filePaths.length > 0) {
+      const res = await window.api.importShaderpack(targetId, filePaths);
+      if (res && res.success) {
+        showToast(`Imported ${res.imported.length} shaderpack(s)!`, 'success');
+        refreshInstalledShadersList(targetId);
+      }
+    }
+  });
+}
+
+async function refreshInstalledShadersList(packId) {
+  const container = document.getElementById('installed-shaders-container');
+  const listEl = document.getElementById('installed-shaders-list');
+  if (!container || !listEl || !packId) return;
+
+  const shaders = await window.api.getInstalledShaders(packId);
+  listEl.innerHTML = '';
+
+  if (shaders && shaders.length > 0) {
+    container.style.display = 'flex';
+    shaders.forEach(shader => {
+      const item = document.createElement('div');
+      item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); padding: 6px 10px; border-radius: 6px; font-size: 11px;';
+      item.innerHTML = `
+        <span style="color: #fff; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">🎨 ${shader}</span>
+        <button class="delete-shader-btn" style="background: transparent; border: none; color: #ff5252; cursor: pointer; font-size: 12px;">✖</button>
+      `;
+      const delBtn = item.querySelector('.delete-shader-btn');
+      if (delBtn) {
+        delBtn.addEventListener('click', async () => {
+          const res = await window.api.deleteShaderpack(packId, shader);
+          if (res && res.success) {
+            item.remove();
+            showToast(`Deleted ${shader}`, 'info');
+          }
+        });
+      }
+      listEl.appendChild(item);
+    });
+  } else {
+    container.style.display = 'none';
+  }
+}
+
+async function populateModpackTabSettings(packId) {
+  const targetId = packId || activePack || activeInstanceId;
+  const instance = configSettings.instances ? configSettings.instances.find(i => i.id === targetId) : null;
+  
+  const titleEl = document.getElementById('modpack-tab-title');
+  const subtitleEl = document.getElementById('modpack-tab-subtitle');
+  
+  if (instance) {
+    if (titleEl) titleEl.textContent = instance.name || 'Modpack Options';
+    if (subtitleEl) subtitleEl.textContent = `Configure options specifically for ${instance.name}`;
+    settingsPackId = instance.id;
     
     // Conditionally show/hide Iris toggle based on supportsIris
     const addonCard = document.querySelector('.addon-control-card');
@@ -2853,80 +3078,164 @@ if (optPackSettingsBtn && packSettingsModal) {
     } else {
       if (addonCard) addonCard.style.display = 'flex';
     }
-    
-    packSettingsModal.classList.remove('hidden');
-  });
-
-  const packSettingsCloseBtn = document.getElementById('pack-settings-close');
-  if (packSettingsCloseBtn) {
-    packSettingsCloseBtn.addEventListener('click', () => {
-      packSettingsModal.classList.add('hidden');
-    });
-  }
-  
-  packSettingsModal.addEventListener('click', (e) => {
-    if (e.target === packSettingsModal) packSettingsModal.classList.add('hidden');
-  });
-
-  const packSettingsSaveBtn = document.getElementById('pack-settings-save');
-  if (packSettingsSaveBtn) {
-    packSettingsSaveBtn.addEventListener('click', () => {
-      packSettingsModal.classList.add('hidden');
-    });
+  } else {
+    if (titleEl) titleEl.textContent = 'No Modpack Selected';
+    if (subtitleEl) subtitleEl.textContent = 'Select an installed modpack to configure options';
   }
 
-  // Reset Options
-  const packSettingsResetBtn = document.getElementById('pack-settings-reset');
-  if (packSettingsResetBtn) {
-    packSettingsResetBtn.addEventListener('click', () => {
-      showCustomConfirm('Reset Options?', 'Are you sure you want to reset all game settings and shaders for this modpack? This action cannot be undone.', '⚠️', async () => {
-        packSettingsModal.classList.add('hidden');
-        const res = await window.api.resetPackSettings(settingsPackId);
-        if (res.success) {
-          showCustomAlert('Reset Complete', 'Modpack settings have been reset to their defaults.', '✅');
-        } else {
-          showCustomAlert('Error', 'Failed to reset settings: ' + res.error, '❌');
+  // Load Iris shaders option (disabled by default)
+  const shadersToggle = document.getElementById('opt-shaders');
+  const packShadersActions = document.getElementById('pack-shaders-actions');
+
+  function updateShadersSubmenuVisibility() {
+    if (!shadersToggle || !packShadersActions) return;
+    if (shadersToggle.checked) {
+      packShadersActions.style.display = 'flex';
+    } else {
+      packShadersActions.style.display = 'none';
+    }
+  }
+
+  if (shadersToggle && targetId) {
+    if (!configSettings.addons) configSettings.addons = {};
+    const addons = configSettings.addons[targetId];
+    shadersToggle.checked = addons && typeof addons.shaders === 'boolean' ? addons.shaders : false;
+    updateShadersSubmenuVisibility();
+    shadersToggle.onchange = updateShadersSubmenuVisibility;
+  }
+
+  // Populate installed shader packs
+  if (targetId) {
+    refreshInstalledShadersList(targetId);
+  }
+
+  // Load game options from options.txt
+  if (targetId) {
+    const res = await window.api.readGameOptions(targetId);
+    if (res && res.success && res.options) {
+      const opts = res.options;
+      if (optRenderEl) {
+        optRenderEl.value = opts.renderDistance;
+        if (optRenderValEl) optRenderValEl.textContent = `${opts.renderDistance} chunks`;
+      }
+      if (optFovEl) {
+        const fovVal = Math.round(opts.fov * 40 + 70);
+        optFovEl.value = fovVal;
+        if (optFovValEl) {
+          if (fovVal === 70) optFovValEl.textContent = '70 (Normal)';
+          else if (fovVal === 110) optFovValEl.textContent = '110 (Quake Pro)';
+          else optFovValEl.textContent = fovVal;
         }
-      });
-    });
+      }
+      if (optSensitivityEl) {
+        const sensVal = Math.round(opts.mouseSensitivity * 200);
+        optSensitivityEl.value = sensVal;
+        if (optSensitivityValEl) optSensitivityValEl.textContent = `${sensVal}%`;
+      }
+      const guiSelect = document.getElementById('opt-gui-scale');
+      if (guiSelect) guiSelect.value = String(opts.guiScale || 0);
+
+      const fpsSelect = document.getElementById('opt-max-fps');
+      if (fpsSelect) fpsSelect.value = String(opts.maxFps || 0);
+
+      if (optMasterEl) {
+        const masterVal = Math.round(opts.soundCategory_master * 100);
+        optMasterEl.value = masterVal;
+        if (optMasterValEl) optMasterValEl.textContent = `${masterVal}%`;
+      }
+      if (optMusicEl) {
+        const musicVal = Math.round(opts.soundCategory_music * 100);
+        optMusicEl.value = musicVal;
+        if (optMusicValEl) optMusicValEl.textContent = `${musicVal}%`;
+      }
+
+      const vsyncCheck = document.getElementById('opt-vsync');
+      if (vsyncCheck) vsyncCheck.checked = !!opts.enableVsync;
+
+      const fullscreenCheck = document.getElementById('opt-fullscreen');
+      if (fullscreenCheck) fullscreenCheck.checked = !!opts.fullscreen;
+    }
   }
+}
 
-  // Delete Modpack
-  const packSettingsDeleteBtn = document.getElementById('pack-settings-delete');
-  if (packSettingsDeleteBtn) {
-    packSettingsDeleteBtn.addEventListener('click', () => {
-      showCustomConfirm('Delete Modpack?', 'This will permanently delete the modpack files, including all mods and worlds. Are you absolutely sure?', '🗑️', async () => {
-        packSettingsModal.classList.add('hidden');
-        const res = await window.api.deletePack(settingsPackId);
-        if (res.success) {
-          showCustomAlert('Deleted', 'Modpack successfully deleted.', '🗑️');
-          // Delete instance from config
-          configSettings.instances = configSettings.instances.filter(i => i.id !== settingsPackId);
-          await saveSettingsData();
-          if (activePack === settingsPackId || activeInstanceId === settingsPackId) {
-            if (versionCheckInterval) {
-              clearInterval(versionCheckInterval);
-              versionCheckInterval = null;
-            }
-            activePack = null;
-            activeInstanceId = null;
-            launcherState = 'ready';
+function switchSettingsTab(tabName) {
+  if (tabName === 'modpack') {
+    if (tabGeneralBtn) tabGeneralBtn.classList.remove('active');
+    if (tabModpackBtn) tabModpackBtn.classList.add('active');
+    if (tabGeneralContent) tabGeneralContent.classList.add('hidden');
+    if (tabModpackContent) tabModpackContent.classList.remove('hidden');
+    populateModpackTabSettings(settingsPackId || activePack);
+  } else {
+    if (tabModpackBtn) tabModpackBtn.classList.remove('active');
+    if (tabGeneralBtn) tabGeneralBtn.classList.add('active');
+    if (tabModpackContent) tabModpackContent.classList.add('hidden');
+    if (tabGeneralContent) tabGeneralContent.classList.remove('hidden');
+  }
+}
 
-            progressContainer.classList.add('hidden');
-            progressFill.style.width = '0%';
-            progressPercentage.textContent = '0%';
-            playBtn.disabled = true;
-            btnText.textContent = 'PLAY';
+if (tabGeneralBtn && tabModpackBtn) {
+  tabGeneralBtn.addEventListener('click', () => switchSettingsTab('general'));
+  tabModpackBtn.addEventListener('click', () => switchSettingsTab('modpack'));
+}
 
-            document.querySelector('.pack-display').style.display = 'none';
-            const actionWidget = document.querySelector('.action-widget');
-            if (actionWidget) actionWidget.style.display = 'none';
+// Modpack Settings Option from Context Menu
+const optPackSettingsBtn = document.getElementById('opt-pack-settings');
+if (optPackSettingsBtn) {
+  optPackSettingsBtn.addEventListener('click', () => {
+    instanceOptionsMenu.classList.add('hidden');
+    if (!contextMenuTargetId) return;
+    settingsPackId = contextMenuTargetId;
+    switchSettingsTab('modpack');
+    settingsModal.classList.remove('hidden');
+  });
+}
+
+// Pack Settings Actions in Tab
+const packSettingsResetBtn = document.getElementById('pack-settings-reset');
+if (packSettingsResetBtn) {
+  packSettingsResetBtn.addEventListener('click', () => {
+    const targetId = settingsPackId || activePack;
+    if (!targetId) return;
+    showCustomConfirm('Reset Options?', 'Are you sure you want to reset all game settings and shaders for this modpack? This action cannot be undone.', '⚠️', async () => {
+      const res = await window.api.resetPackSettings(targetId);
+      if (res && res.success) {
+        showCustomAlert('Reset Complete', 'Modpack settings have been reset to default.', '✅');
+      } else {
+        showCustomAlert('Error', 'Failed to reset settings: ' + (res ? res.error : 'Unknown error'), '❌');
+      }
+    });
+  });
+}
+
+const packSettingsDeleteBtn = document.getElementById('pack-settings-delete');
+if (packSettingsDeleteBtn) {
+  packSettingsDeleteBtn.addEventListener('click', () => {
+    const targetId = settingsPackId || activePack;
+    if (!targetId) return;
+    showCustomConfirm('Delete Modpack?', 'This will permanently delete the modpack files, including all mods and worlds. Are you absolutely sure?', '🗑️', async () => {
+      settingsModal.classList.add('hidden');
+      const res = await window.api.deletePack(targetId);
+      if (res && res.success) {
+        showCustomAlert('Deleted', 'Modpack successfully deleted.', '🗑️');
+        configSettings.instances = (configSettings.instances || []).filter(i => i.id !== targetId);
+        await saveSettingsData();
+        if (activePack === targetId || activeInstanceId === targetId) {
+          if (versionCheckInterval) {
+            clearInterval(versionCheckInterval);
+            versionCheckInterval = null;
           }
-          renderInstancesList();
-        } else {
-          showCustomAlert('Error', 'Failed to delete modpack: ' + res.error, '❌');
+          activePack = null;
+          activeInstanceId = null;
+          launcherState = 'ready';
+          progressContainer.classList.add('hidden');
+          playBtn.disabled = true;
+          btnText.textContent = 'PLAY';
+          document.querySelector('.pack-display').style.display = 'none';
         }
-      });
+        renderInstancesList();
+      } else {
+        showCustomAlert('Error', 'Failed to delete modpack: ' + (res ? res.error : 'Unknown error'), '❌');
+      }
     });
-  }
+  });
 }

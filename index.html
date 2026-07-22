@@ -163,78 +163,237 @@
   </div>
 
   <div class="modal-overlay hidden" id="settings-modal">
-    <div class="settings-card">
+    <div class="settings-card" style="width: 560px;">
       <div class="modal-header">
-        <h2>Launcher Configuration</h2>
+        <h2 id="settings-modal-title">Settings</h2>
         <button class="close-btn" id="modal-close">&times;</button>
       </div>
-      
-      <div class="modal-body">
 
-        <!-- RAM Allocation -->
-        <div class="form-group">
-          <div class="label-row">
-            <label for="settings-ram">RAM Allocation</label>
-            <span id="ram-value">12 GB</span>
-          </div>
-          <div class="range-container">
-            <input type="range" id="settings-ram" min="2" max="32" step="1" value="12">
-            <div class="range-labels">
-              <span>6 GB</span>
-              <span>12 GB</span>
-              <span>18 GB</span>
-              <span>24 GB</span>
-              <span>32 GB</span>
+      <div class="settings-tabs-bar">
+        <button class="settings-tab-btn active" id="tab-general-btn">⚙️ General Settings</button>
+        <button class="settings-tab-btn" id="tab-modpack-btn">📦 Modpack Options</button>
+      </div>
+      
+      <div class="modal-body" style="padding-top: 15px;">
+        <!-- GENERAL LAUNCHER SETTINGS TAB -->
+        <div id="tab-general-content" class="settings-tab-content">
+          <!-- RAM Allocation -->
+          <div class="form-group">
+            <div class="label-row">
+              <label for="settings-ram">RAM Allocation</label>
+              <span id="ram-value">12 GB</span>
+            </div>
+            <div class="range-container">
+              <input type="range" id="settings-ram" min="2" max="32" step="1" value="12">
+              <div class="range-labels">
+                <span>6 GB</span>
+                <span>12 GB</span>
+                <span>18 GB</span>
+                <span>24 GB</span>
+                <span>32 GB</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Java Path -->
-        <div class="form-group">
-          <label for="settings-java">Custom Java Executable</label>
-          <div class="input-with-button">
-            <input type="text" id="settings-java" placeholder="Auto-detecting system Java...">
-            <button id="browse-java-btn">Browse</button>
+          <!-- Java Path -->
+          <div class="form-group">
+            <label for="settings-java">Custom Java Executable</label>
+            <div class="input-with-button">
+              <input type="text" id="settings-java" placeholder="Auto-detecting system Java...">
+              <button id="browse-java-btn">Browse</button>
+            </div>
+            <span class="form-tip">Leave blank to use default system Java. Required for Fabric/Forge.</span>
           </div>
-          <span class="form-tip">Leave blank to use the default system Java. Required for Forge.</span>
-        </div>
 
-        <!-- JVM Arguments -->
-        <div class="form-group">
-          <label for="settings-args">JVM Launch Arguments</label>
-          <textarea id="settings-args" rows="3" placeholder="-XX:+UseG1GC..."></textarea>
-          <span class="form-tip">Advanced settings. Standard arguments are filled by default.</span>
-        </div>
-
-        <!-- Mock Mode Toggle -->
-        <div class="form-group row-group">
-          <div>
-            <label>Developer Mode</label>
-            <span class="form-tip">Enables advanced logging and debugging tools.</span>
+          <!-- JVM Arguments -->
+          <div class="form-group">
+            <label for="settings-args">JVM Launch Arguments</label>
+            <textarea id="settings-args" rows="3" placeholder="-XX:+UseG1GC..."></textarea>
+            <span class="form-tip">Advanced settings. Standard arguments are filled by default.</span>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="settings-mock">
-            <span class="slider-switch"></span>
-          </label>
+
+          <!-- Mock Mode Toggle -->
+          <div class="form-group row-group">
+            <div>
+              <label>Developer Mode</label>
+              <span class="form-tip">Enables advanced logging and debugging tools.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="settings-mock">
+              <span class="slider-switch"></span>
+            </label>
+          </div>
+
+          <!-- Game Storage -->
+          <div class="form-group row-group">
+            <div>
+              <label>Game Files Directory</label>
+              <span class="form-tip">Open the folder where modpacks are downloaded.</span>
+            </div>
+            <button id="settings-open-instances-btn" class="secondary-btn" style="padding: 6px 12px; font-size: 11px;">Open Folder</button>
+          </div>
+
+          <!-- Danger Zone -->
+          <div class="form-group">
+            <label style="color: #ff5252;">Danger Zone</label>
+            <div style="display: flex; gap: 10px; margin-top: 5px;">
+              <button id="settings-reset-btn" class="danger-btn">Reset Settings</button>
+              <button id="settings-clear-btn" class="danger-btn">Delete All Game Versions</button>
+            </div>
+            <span class="form-tip">These actions cannot be undone.</span>
+          </div>
         </div>
 
-        <!-- Game Storage -->
-        <div class="form-group row-group">
-          <div>
-            <label>Game Files Directory</label>
-            <span class="form-tip">Open the folder where modpacks are downloaded.</span>
+        <!-- MODPACK OPTIONS TAB -->
+        <div id="tab-modpack-content" class="settings-tab-content hidden" style="display: flex; flex-direction: column; gap: 15px;">
+          <div class="modpack-settings-banner">
+            <span class="modpack-tab-title" id="modpack-tab-title">Active Modpack</span>
+            <span class="modpack-tab-subtitle" id="modpack-tab-subtitle">Configure specific settings for this modpack</span>
           </div>
-          <button id="settings-open-instances-btn" class="secondary-btn" style="padding: 6px 12px; font-size: 11px;">Open Folder</button>
-        </div>
 
-        <!-- Danger Zone -->
-        <div class="form-group">
-          <label style="color: #ff5252;">Danger Zone</label>
-          <div style="display: flex; gap: 10px; margin-top: 5px;">
-            <button id="settings-reset-btn" class="danger-btn">Reset Settings</button>
-            <button id="settings-clear-btn" class="danger-btn">Delete All Game Versions</button>
+          <!-- Shaders Card -->
+          <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 12px;">
+            <div class="addon-control-card" style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 13px; font-weight: 700; color: #fff;">Shader Support (Iris / Oculus)</span>
+                <span style="font-size: 11px; color: rgba(255,255,255,0.5);">Toggle shader support. Installs Iris (Fabric) or Oculus (Forge).</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="opt-shaders">
+                <span class="slider-switch"></span>
+              </label>
+            </div>
+
+            <div id="pack-shaders-actions" style="display: none; flex-direction: column; gap: 10px; padding-top: 5px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <button id="pack-open-shaders-btn" class="secondary-btn" style="font-size: 11px; padding: 6px 12px;">Open Shaders Folder</button>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <a href="https://modrinth.com/shaders" target="_blank" id="pack-download-shaders-link" style="color: var(--primary); font-size: 11px; text-decoration: none; font-weight: 600;">⚡ Get Shaders</a>
+                  <a href="#" id="pack-shaders-help-btn" style="color: rgba(255,255,255,0.5); font-size: 11px; text-decoration: none; font-weight: 600;">❓ How to install?</a>
+                </div>
+              </div>
+              
+              <!-- Help panel -->
+              <div id="shaders-help-panel" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px; font-size: 11px; color: rgba(255,255,255,0.7); line-height: 1.4; display: none; flex-direction: column; gap: 4px;">
+                <p style="font-weight: bold; color: #fff;">How to install shaders:</p>
+                <p>1. Turn Shader Support ON above.</p>
+                <p>2. Download a shaderpack (.zip) from Modrinth.</p>
+                <p>3. Drag & Drop the .zip file directly into the box below.</p>
+              </div>
+
+              <!-- Drag & Drop Zone -->
+              <div id="shaders-dropzone" style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 8px; padding: 15px; text-align: center; color: rgba(255,255,255,0.5); font-size: 11px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; cursor: pointer; background: rgba(0,0,0,0.15);">
+                <span>📁 Drag & Drop shader .zip file here (or click to browse)</span>
+              </div>
+              <div id="shaders-dropzone-status" style="font-size: 11px; text-align: center; color: #2cd63b; display: none; font-weight: 600;"></div>
+
+              <!-- Installed Shaders List -->
+              <div id="installed-shaders-container" style="display: none; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+                <span style="font-size: 11px; font-weight: 700; color: #fff;">Installed Shaders:</span>
+                <div id="installed-shaders-list" style="display: flex; flex-direction: column; gap: 5px; max-height: 100px; overflow-y: auto;"></div>
+              </div>
+            </div>
           </div>
-          <span class="form-tip">These actions cannot be undone.</span>
+
+          <!-- Video & Performance Settings Card -->
+          <div style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; padding: 15px; display: flex; flex-direction: column; gap: 15px;">
+            <span style="font-size: 12px; font-weight: 700; color: #fff;">Minecraft Display & Controls</span>
+
+            <!-- Render Distance -->
+            <div class="form-group" style="margin: 0;">
+              <div class="label-row" style="display: flex; justify-content: space-between; font-size: 11px;">
+                <label for="opt-render">Render Distance</label>
+                <span id="opt-render-val" style="color: var(--primary); font-weight: 700;">12 chunks</span>
+              </div>
+              <input type="range" id="opt-render" min="2" max="32" step="1" value="12" style="width: 100%;">
+            </div>
+
+            <!-- FOV -->
+            <div class="form-group" style="margin: 0;">
+              <div class="label-row" style="display: flex; justify-content: space-between; font-size: 11px;">
+                <label for="opt-fov">Field of View (FOV)</label>
+                <span id="opt-fov-val" style="color: var(--primary); font-weight: 700;">70 (Normal)</span>
+              </div>
+              <input type="range" id="opt-fov" min="70" max="110" step="1" value="70" style="width: 100%;">
+            </div>
+
+            <!-- Mouse Sensitivity -->
+            <div class="form-group" style="margin: 0;">
+              <div class="label-row" style="display: flex; justify-content: space-between; font-size: 11px;">
+                <label for="opt-sensitivity">Mouse Sensitivity</label>
+                <span id="opt-sensitivity-val" style="color: var(--primary); font-weight: 700;">100%</span>
+              </div>
+              <input type="range" id="opt-sensitivity" min="0" max="200" step="5" value="100" style="width: 100%;">
+            </div>
+
+            <div style="display: flex; gap: 10px; width: 100%;">
+              <div class="form-group" style="flex: 1; margin: 0;">
+                <label for="opt-gui-scale" style="font-size: 11px;">GUI Scale</label>
+                <select id="opt-gui-scale" class="custom-select-dark">
+                  <option value="0">Auto</option>
+                  <option value="1">1x</option>
+                  <option value="2">2x</option>
+                  <option value="3">3x</option>
+                  <option value="4">4x</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex: 1; margin: 0;">
+                <label for="opt-max-fps" style="font-size: 11px;">Max Framerate</label>
+                <select id="opt-max-fps" class="custom-select-dark">
+                  <option value="0">Unlimited</option>
+                  <option value="30">30 FPS</option>
+                  <option value="60">60 FPS</option>
+                  <option value="120">120 FPS</option>
+                  <option value="144">144 FPS</option>
+                  <option value="250">250 FPS</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Volume & Display Toggles -->
+            <div style="display: flex; gap: 10px; width: 100%;">
+              <div class="form-group" style="flex: 1; margin: 0;">
+                <div class="label-row" style="display: flex; justify-content: space-between; font-size: 11px;">
+                  <label for="opt-master">Master Volume</label>
+                  <span id="opt-master-val" style="color: var(--primary); font-weight: 700;">100%</span>
+                </div>
+                <input type="range" id="opt-master" min="0" max="100" step="5" value="100" style="width: 100%;">
+              </div>
+              <div class="form-group" style="flex: 1; margin: 0;">
+                <div class="label-row" style="display: flex; justify-content: space-between; font-size: 11px;">
+                  <label for="opt-music">Music Volume</label>
+                  <span id="opt-music-val" style="color: var(--primary); font-weight: 700;">100%</span>
+                </div>
+                <input type="range" id="opt-music" min="0" max="100" step="5" value="100" style="width: 100%;">
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label class="switch" style="transform: scale(0.85);">
+                  <input type="checkbox" id="opt-vsync">
+                  <span class="slider-switch"></span>
+                </label>
+                <span style="font-size: 11px; color: #fff;">Enable VSync</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label class="switch" style="transform: scale(0.85);">
+                  <input type="checkbox" id="opt-fullscreen">
+                  <span class="slider-switch"></span>
+                </label>
+                <span style="font-size: 11px; color: #fff;">Fullscreen Mode</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modpack Actions -->
+          <div style="margin-top: 5px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
+            <label style="color: #ff5252; font-size: 12px; font-weight: 700;">Modpack Actions</label>
+            <div style="display: flex; gap: 10px;">
+              <button id="pack-settings-reset" class="danger-btn" style="padding: 8px 12px; font-size: 11px;" title="Reset all options of this modpack to default">Reset Options</button>
+              <button id="pack-settings-delete" class="danger-btn" style="padding: 8px 12px; font-size: 11px;" title="Delete this modpack completely">Delete Modpack</button>
+            </div>
+          </div>
         </div>
       </div>
 

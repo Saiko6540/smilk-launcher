@@ -332,6 +332,227 @@ ipcMain.handle('select-java-path', async () => {
   return null;
 });
 
+// Select Shaderpack File Dialog IPC
+ipcMain.handle('select-shaderpack-file', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Select Shaderpack (.zip)',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Shaderpack Archive', extensions: ['zip'] }
+    ]
+  });
+
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths;
+  }
+  return null;
+});
+
+// Import Shaderpack Files IPC
+ipcMain.handle('import-shaderpack', async (event, packKey, filePaths) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const shaderpacksDir = path.join(instanceDir, 'shaderpacks');
+    
+    if (!fs.existsSync(shaderpacksDir)) {
+      fs.mkdirSync(shaderpacksDir, { recursive: true });
+    }
+    
+    const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    const imported = [];
+    
+    for (const fp of paths) {
+      const filename = path.basename(fp);
+      const destPath = path.join(shaderpacksDir, filename);
+      fs.copyFileSync(fp, destPath);
+      imported.push(filename);
+    }
+    
+    return { success: true, imported };
+  } catch (err) {
+    console.error('Failed to import shaderpack:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Get Installed Shaderpacks IPC
+ipcMain.handle('get-installed-shaders', async (event, packKey) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const shaderpacksDir = path.join(instanceDir, 'shaderpacks');
+    if (!fs.existsSync(shaderpacksDir)) {
+      return [];
+    }
+    const files = fs.readdirSync(shaderpacksDir);
+    const shaderpacks = [];
+    for (const file of files) {
+      const fullPath = path.join(shaderpacksDir, file);
+      if (file.endsWith('.zip') || fs.statSync(fullPath).isDirectory()) {
+        shaderpacks.push(file);
+      }
+    }
+    return shaderpacks;
+  } catch (err) {
+    console.error('Failed to get installed shaders:', err);
+    return [];
+  }
+});
+
+// Delete Shaderpack IPC
+ipcMain.handle('delete-shaderpack', async (event, packKey, filename) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const filePath = path.join(instanceDir, 'shaderpacks', filename);
+    if (fs.existsSync(filePath)) {
+      if (fs.statSync(filePath).isDirectory()) {
+        fs.rmSync(filePath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(filePath);
+      }
+      return { success: true };
+    }
+    return { success: false, error: 'File not found' };
+  } catch (err) {
+    console.error('Failed to delete shaderpack:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Open Shaders Folder IPC
+ipcMain.on('open-shaders-dir', (event, packKey) => {
+  const shadersDir = path.join(userDataPath, 'game_data', 'instances', packKey, 'shaderpacks');
+  if (!fs.existsSync(shadersDir)) {
+    fs.mkdirSync(shadersDir, { recursive: true });
+  }
+  shell.openPath(shadersDir);
+});
+
+// Read options.txt Game Options IPC
+ipcMain.handle('read-game-options', async (event, packKey) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const optionsPath = path.join(instanceDir, 'options.txt');
+
+    const options = {
+      renderDistance: 12,
+      enableVsync: true,
+      fov: 0.0,
+      mouseSensitivity: 0.5,
+      guiScale: 0,
+      maxFps: 260,
+      soundCategory_master: 1.0,
+      soundCategory_music: 1.0,
+      fullscreen: false
+    };
+
+    if (fs.existsSync(optionsPath)) {
+      const content = fs.readFileSync(optionsPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const part = line.trim();
+        if (!part) continue;
+        const index = part.indexOf(':');
+        if (index === -1) continue;
+        const key = part.substring(0, index).trim();
+        const val = part.substring(index + 1).trim();
+
+        if (key === 'renderDistance') options.renderDistance = parseInt(val, 10) || 12;
+        else if (key === 'enableVsync') options.enableVsync = val === 'true';
+        else if (key === 'fov') options.fov = parseFloat(val) || 0.0;
+        else if (key === 'mouseSensitivity') options.mouseSensitivity = parseFloat(val) || 0.5;
+        else if (key === 'guiScale') options.guiScale = parseInt(val, 10) || 0;
+        else if (key === 'maxFps') options.maxFps = parseInt(val, 10) || 260;
+        else if (key === 'soundCategory_master') options.soundCategory_master = parseFloat(val) || 1.0;
+        else if (key === 'soundCategory_music') options.soundCategory_music = parseFloat(val) || 1.0;
+        else if (key === 'fullscreen') options.fullscreen = val === 'true';
+      }
+    }
+
+    return { success: true, options };
+  } catch (err) {
+    console.error('Failed to read game options:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Save options.txt Game Options IPC
+ipcMain.handle('save-game-options', async (event, packKey, optionsObj) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    const optionsPath = path.join(instanceDir, 'options.txt');
+
+    if (!fs.existsSync(instanceDir)) {
+      fs.mkdirSync(instanceDir, { recursive: true });
+    }
+
+    let optionsMap = new Map();
+    if (fs.existsSync(optionsPath)) {
+      const content = fs.readFileSync(optionsPath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const part = line.trim();
+        if (!part) continue;
+        const index = part.indexOf(':');
+        if (index === -1) {
+          optionsMap.set(part, null);
+          continue;
+        }
+        const key = part.substring(0, index).trim();
+        const val = part.substring(index + 1).trim();
+        optionsMap.set(key, val);
+      }
+    }
+
+    if (optionsObj.renderDistance !== undefined) optionsMap.set('renderDistance', String(optionsObj.renderDistance));
+    if (optionsObj.enableVsync !== undefined) optionsMap.set('enableVsync', String(optionsObj.enableVsync));
+    if (optionsObj.fov !== undefined) optionsMap.set('fov', String(optionsObj.fov));
+    if (optionsObj.mouseSensitivity !== undefined) optionsMap.set('mouseSensitivity', String(optionsObj.mouseSensitivity));
+    if (optionsObj.guiScale !== undefined) optionsMap.set('guiScale', String(optionsObj.guiScale));
+    if (optionsObj.maxFps !== undefined) optionsMap.set('maxFps', String(optionsObj.maxFps));
+    if (optionsObj.soundCategory_master !== undefined) optionsMap.set('soundCategory_master', String(optionsObj.soundCategory_master));
+    if (optionsObj.soundCategory_music !== undefined) optionsMap.set('soundCategory_music', String(optionsObj.soundCategory_music));
+    if (optionsObj.fullscreen !== undefined) optionsMap.set('fullscreen', String(optionsObj.fullscreen));
+
+    if (optionsObj.shaders !== undefined) {
+      if (optionsObj.shaders === false) {
+        optionsMap.set('shaderPack', 'OFF');
+        try {
+          const configDir = path.join(instanceDir, 'config');
+          if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+          fs.writeFileSync(path.join(configDir, 'iris.properties'), 'enableShaders=false\n', 'utf8');
+          fs.writeFileSync(path.join(instanceDir, 'optionsiris.txt'), 'enableShaders=false\n', 'utf8');
+        } catch(e) {
+          console.warn('Failed to disable iris properties:', e);
+        }
+      } else {
+        if (optionsMap.get('shaderPack') === 'OFF') {
+          optionsMap.delete('shaderPack');
+        }
+        try {
+          const configDir = path.join(instanceDir, 'config');
+          if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+          fs.writeFileSync(path.join(configDir, 'iris.properties'), 'enableShaders=true\n', 'utf8');
+          fs.writeFileSync(path.join(instanceDir, 'optionsiris.txt'), 'enableShaders=true\n', 'utf8');
+        } catch(e) {
+          console.warn('Failed to enable iris properties:', e);
+        }
+      }
+    }
+
+    let newContent = '';
+    for (const [key, val] of optionsMap.entries()) {
+      if (val === null) newContent += `${key}\n`;
+      else newContent += `${key}:${val}\n`;
+    }
+
+    fs.writeFileSync(optionsPath, newContent, 'utf8');
+    return { success: true };
+  } catch (err) {
+    console.error('Failed to save game options:', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // Open website externally
 ipcMain.on('open-website', () => {
   shell.openExternal('https://submarinemilk.com');
@@ -420,7 +641,7 @@ ipcMain.handle('start-update', async (event, instanceId) => {
   if (!instance) throw new Error('Unknown instance');
 
   const sendProgress = (data) => {
-    if (mainWindow) mainWindow.webContents.send('update-status', data);
+    if (mainWindow) mainWindow.webContents.send('update-status', { ...data, instanceId });
   };
 
   try {
@@ -435,12 +656,18 @@ ipcMain.handle('start-update', async (event, instanceId) => {
     const localVersionFile = path.join(instanceDir, 'local_version.json');
     if (fs.existsSync(localVersionFile)) {
       const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
-      instance.mcVersion = localConfig.minecraft;
-      instance.loader = localConfig.loader;
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      
+      // Re-read fresh settings from disk to avoid overwriting newly added instances during parallel installs
+      const freshSettings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
+      const targetInst = freshSettings.instances ? freshSettings.instances.find(i => i.id === instanceId) : null;
+      if (targetInst) {
+        targetInst.mcVersion = localConfig.minecraft;
+        targetInst.loader = localConfig.loader;
+        fs.writeFileSync(settingsPath, JSON.stringify(freshSettings, null, 2));
 
-      // Notify renderer that settings updated
-      if (mainWindow) mainWindow.webContents.send('settings-updated', settings);
+        // Notify renderer that settings updated
+        if (mainWindow) mainWindow.webContents.send('settings-updated', freshSettings);
+      }
     }
 
     return { success: true };
@@ -459,8 +686,9 @@ ipcMain.handle('start-launch', async (event, instanceId) => {
   if (!instance) throw new Error('Unknown instance');
 
   const sendProgress = (data) => {
+    const fullData = { ...data, instanceId };
     if (mainWindow) {
-      mainWindow.webContents.send('launch-status', data);
+      mainWindow.webContents.send('launch-status', fullData);
     }
 
     if (data.status === 'game_started') {
