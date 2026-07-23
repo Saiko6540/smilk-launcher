@@ -45,6 +45,92 @@ body.theme-vanilla {
   --border-color: rgba(76, 175, 80, 0.2);
 }
 
+body.theme-hardcore {
+  --primary: #ff1744;
+  --primary-rgb: 255, 23, 68;
+  --accent: #ff9100;
+  --accent-rgb: 255, 145, 0;
+  --bg-gradient: radial-gradient(circle at 50% 40%, #3a0007 0%, #150003 60%, #050001 100%);
+  --glow: 0 0 30px rgba(255, 23, 68, 0.6);
+  --card-bg: rgba(30, 5, 8, 0.75);
+  --border-color: rgba(255, 23, 68, 0.45);
+}
+
+/* --- Limited Edition Badge & Hardcore Styling --- */
+.limited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #ff1744 0%, #d50000 100%);
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  box-shadow: 0 0 10px rgba(255, 23, 68, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  animation: limited-glow-pulse 2s infinite ease-in-out;
+}
+
+/* Corner Ribbon / Stripe for Limited Edition */
+.limited-stripe {
+  position: absolute;
+  top: 7px;
+  right: -24px;
+  background: linear-gradient(135deg, #ff1744 0%, #b71c1c 100%);
+  color: #fff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 7.5px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  padding: 2px 24px;
+  transform: rotate(35deg);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 2;
+  text-transform: uppercase;
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+@keyframes limited-glow-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 23, 68, 0.6); transform: scale(1); }
+  50% { box-shadow: 0 0 18px rgba(255, 23, 68, 0.95); transform: scale(1.04); }
+}
+
+.modpack-item.limited-edition {
+  border: 1px solid rgba(255, 23, 68, 0.45) !important;
+  box-shadow: 0 0 15px rgba(255, 23, 68, 0.15), inset 0 0 15px rgba(255, 23, 68, 0.08) !important;
+  background: linear-gradient(90deg, rgba(255, 23, 68, 0.14) 0%, rgba(25, 4, 8, 0.6) 100%) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.modpack-item.limited-edition:hover {
+  border-color: rgba(255, 23, 68, 0.75) !important;
+  box-shadow: 0 0 20px rgba(255, 23, 68, 0.35), inset 0 0 20px rgba(255, 23, 68, 0.15) !important;
+}
+
+.modpack-item.limited-edition::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 23, 68, 0.25), transparent);
+  transform: skewX(-25deg);
+  animation: limited-shimmer 4s infinite;
+}
+
+@keyframes limited-shimmer {
+  0% { left: -100%; }
+  35%, 100% { left: 200%; }
+}
+
 /* --- Base Reset & Typography --- */
 * {
   box-sizing: border-box;
@@ -1017,6 +1103,15 @@ input:checked + .slider-switch:before {
 .danger-btn:hover {
   background: rgba(255, 82, 82, 0.2);
   border-color: rgba(255, 82, 82, 0.4);
+}
+
+.danger-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 82, 82, 0.04);
+  border-color: rgba(255, 82, 82, 0.1);
+  color: rgba(255, 82, 82, 0.4);
+  pointer-events: none;
 }
 
 .save-btn {

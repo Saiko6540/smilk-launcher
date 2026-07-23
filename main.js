@@ -105,6 +105,18 @@ const modpacks = {
       loader: 'fabric-0.16.5',
       mrpack_url: 'mock://vanilla_plus/pack.mrpack'
     }
+  },
+  hardcore_1_9: {
+    name: 'Hardcore 1.9.4 (Limited)',
+    mcVersion: '1.9.4',
+    loader: 'optifine-1.9.4',
+    configUrl: 'vanilla',
+    mockConfig: {
+      version: '1.0.0',
+      minecraft: '1.9.4',
+      loader: 'optifine-1.9.4',
+      mrpack_url: 'mock://hardcore_1_9/pack.mrpack'
+    }
   }
 };
 
@@ -629,7 +641,7 @@ ipcMain.handle('save-game-options', async (event, packKey, optionsObj) => {
 
 // Open website externally
 ipcMain.on('open-website', () => {
-  shell.openExternal('https://submarinemilk.com');
+  shell.openExternal('https://submarinemilk.netlify.app/');
 });
 
 // Open game directory externally
@@ -790,7 +802,8 @@ ipcMain.handle('start-update', async (event, packKey) => {
 
   // Run real update
   try {
-    await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress, settings);
+    const extendedSettings = { ...settings, mcVersion: pack.mcVersion, loader: pack.loader };
+    await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress, extendedSettings);
     return { success: true };
   } catch (err) {
     sendProgress({ status: 'error', message: err.message });

@@ -27,6 +27,13 @@ const packDetails = {
     mcVersion: '1.21.1',
     loader: 'Fabric-0.16.5',
     serverIp: '185.206.149.27:25601'
+  },
+  hardcore_1_9: {
+    title: 'Hardcore 1.9.4 (Limited)',
+    description: 'Hardcore 1.9.4 event mode with OptiFine shaders. Survival with a twist: dying results in a 1-hour ban from the server!',
+    mcVersion: '1.9.4',
+    loader: 'OptiFine-1.9.4',
+    serverIp: '185.206.149.27:25601'
   }
 };
 
@@ -1110,6 +1117,8 @@ function animate() {
     drawPokemonScene();
   } else if (activeTheme === 'theme-vanilla') {
     drawVanillaScene();
+  } else if (activeTheme === 'theme-hardcore') {
+    drawHardcoreScene();
   }
 }
 
@@ -1914,6 +1923,416 @@ function drawVanillaScene() {
   vanillaMobs.forEach(m => { m.update(); m.draw(groundY); });
 }
 
+// ============ HARDCORE 1.9 — NETHER PIXEL-ART SCENE ============
+let hardcoreTime = 0;
+let hardcoreEmbers = [];
+let hardcoreAshParticles = [];
+let hardcoreLavaBubbles = [];
+let hardcoreGhastY = 0;
+let hardcoreGhastX = 0;
+let hardcoreGhastDir = 1;
+let hardcorePiglinX = 0;
+let hardcorePiglinDir = 1;
+let hardcorePiglinLeg = 0;
+
+function drawHardcoreScene() {
+  hardcoreTime += 0.008;
+  const W = canvas.width;
+  const H = canvas.height;
+  const groundY = H * 0.78;
+
+  // === SKY (DEEP NETHER VOID) ===
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+  skyGrad.addColorStop(0, '#060001');
+  skyGrad.addColorStop(0.3, '#140004');
+  skyGrad.addColorStop(0.6, '#200006');
+  skyGrad.addColorStop(1, '#350009');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, groundY);
+
+  // === BEDROCK CEILING TEXTURE (top) ===
+  ctx.fillStyle = '#0a0002';
+  for (let i = 0; i < W; i += 16) {
+    const h = 8 + Math.abs(Math.sin(i * 0.14)) * 18;
+    ctx.fillRect(i, 0, 16, h);
+    ctx.fillStyle = '#0e0003';
+    ctx.fillRect(i, h, 16, 4);
+    ctx.fillStyle = '#0a0002';
+  }
+  // Dripping lava from ceiling
+  const dripX1 = (W * 0.25);
+  const dripX2 = (W * 0.6);
+  const dripLen1 = 12 + Math.sin(hardcoreTime * 6) * 8;
+  const dripLen2 = 8 + Math.cos(hardcoreTime * 4) * 6;
+  ctx.fillStyle = '#ff6d00';
+  ctx.fillRect(dripX1, 18, 3, dripLen1);
+  ctx.fillRect(dripX2, 14, 3, dripLen2);
+  ctx.fillStyle = '#ffab00';
+  ctx.fillRect(dripX1, 18 + dripLen1, 3, 3);
+  ctx.fillRect(dripX2, 14 + dripLen2, 3, 3);
+
+  // === SQUARE BLOOD MOON ===
+  const moonX = W * 0.8;
+  const moonY = H * 0.16;
+  const moonS = 28;
+  // Glow
+  ctx.fillStyle = 'rgba(255, 23, 68, 0.12)';
+  ctx.fillRect(moonX - moonS - 10, moonY - moonS - 10, (moonS + 10) * 2, (moonS + 10) * 2);
+  ctx.fillStyle = 'rgba(255, 23, 68, 0.06)';
+  ctx.fillRect(moonX - moonS - 18, moonY - moonS - 18, (moonS + 18) * 2, (moonS + 18) * 2);
+  // Moon body
+  ctx.fillStyle = '#b71c1c';
+  ctx.fillRect(moonX - moonS, moonY - moonS, moonS * 2, moonS * 2);
+  // Moon craters (blocky)
+  ctx.fillStyle = '#8b0000';
+  ctx.fillRect(moonX - 15, moonY - 12, 10, 8);
+  ctx.fillRect(moonX + 6, moonY + 5, 14, 10);
+  ctx.fillRect(moonX - 8, moonY + 10, 8, 6);
+  // Moon shadow crescent
+  ctx.fillStyle = '#060001';
+  ctx.fillRect(moonX + moonS - 14, moonY - moonS - 2, 16, moonS * 2 + 4);
+
+  // === DISTANT CRIMSON FOREST (far layer) ===
+  ctx.fillStyle = '#1a0005';
+  for (let i = 0; i < W; i += 38) {
+    const tH = 45 + Math.sin(i * 0.07) * 25;
+    const tX = i + 12;
+    const tY = groundY - tH;
+    // Stem
+    ctx.fillRect(tX, tY, 8, tH);
+    // Crimson fungus cap layers (blocky mushroom steps)
+    ctx.fillStyle = '#2d0008';
+    ctx.fillRect(tX - 16, tY - 6, 40, 6);
+    ctx.fillRect(tX - 12, tY - 12, 32, 6);
+    ctx.fillRect(tX - 6, tY - 18, 20, 6);
+    ctx.fillStyle = '#1a0005';
+  }
+
+  // === CLOSER CRIMSON TREES (mid layer) ===
+  ctx.fillStyle = '#250007';
+  for (let i = 20; i < W; i += 95) {
+    const tH = 80 + Math.sin(i * 0.04 + 2) * 30;
+    const tX = i + 12;
+    const tY = groundY - tH;
+    // Thick nether stem
+    ctx.fillRect(tX, tY, 12, tH);
+    ctx.fillStyle = '#1c0005';
+    ctx.fillRect(tX + 2, tY + 10, 8, tH - 10);
+    // Huge fungus cap layers
+    ctx.fillStyle = '#3d000d';
+    ctx.fillRect(tX - 22, tY - 8, 56, 8);
+    ctx.fillRect(tX - 16, tY - 18, 44, 10);
+    ctx.fillRect(tX - 10, tY - 26, 32, 8);
+    ctx.fillRect(tX - 4, tY - 32, 20, 6);
+    // Shroomlights (glowing blocks in canopy)
+    const shGlow = (Math.sin(hardcoreTime * 3 + i) + 1) * 0.5;
+    ctx.save();
+    ctx.shadowColor = '#ffab00';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = `rgba(255, 171, 0, ${0.7 + shGlow * 0.3})`;
+    ctx.fillRect(tX - 8, tY - 14, 6, 6);
+    ctx.fillRect(tX + 14, tY - 22, 6, 6);
+    ctx.restore();
+    ctx.fillStyle = '#250007';
+  }
+
+  // === NETHER FORTRESS (centre-left) ===
+  const fX = W * 0.42;
+  const fY = groundY;
+  // Main tower
+  ctx.fillStyle = '#150003';
+  ctx.fillRect(fX, fY - 120, 60, 120);
+  // Nether brick texture lines
+  ctx.fillStyle = '#1f0005';
+  for (let row = 0; row < 10; row++) {
+    ctx.fillRect(fX, fY - 120 + row * 12, 60, 1);
+    ctx.fillRect(fX + (row % 2 === 0 ? 20 : 10), fY - 120 + row * 12, 1, 12);
+    ctx.fillRect(fX + (row % 2 === 0 ? 40 : 30), fY - 120 + row * 12, 1, 12);
+  }
+  // Top platform
+  ctx.fillStyle = '#120003';
+  ctx.fillRect(fX - 12, fY - 130, 84, 10);
+  // Battlement teeth
+  for (let i = 0; i < 5; i++) {
+    ctx.fillRect(fX - 12 + i * 17, fY - 142, 9, 12);
+  }
+  // Wither skull face on fortress wall
+  const skullGlow = (Math.sin(hardcoreTime * 2.5) + 1) * 0.5;
+  ctx.fillStyle = '#2a2a2a';
+  ctx.fillRect(fX + 18, fY - 95, 24, 24);
+  ctx.fillStyle = `rgba(255, 23, 68, ${0.6 + skullGlow * 0.4})`;
+  ctx.fillRect(fX + 22, fY - 90, 5, 5);
+  ctx.fillRect(fX + 33, fY - 90, 5, 5);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(fX + 26, fY - 82, 3, 4);
+  ctx.fillRect(fX + 31, fY - 82, 3, 4);
+  ctx.fillRect(fX + 22, fY - 76, 16, 3);
+  // Red wither eye glow lines
+  ctx.fillStyle = `rgba(255, 23, 68, ${0.15 + skullGlow * 0.12})`;
+  ctx.fillRect(fX + 20, fY - 93, 22, 1);
+  ctx.fillRect(fX + 20, fY - 87, 22, 1);
+
+  // Nether Portal on fortress
+  const pX = fX + 22;
+  const pY = fY - 55;
+  ctx.fillStyle = '#11001c';
+  ctx.fillRect(pX, pY, 18, 30);
+  ctx.fillStyle = '#08000a';
+  ctx.fillRect(pX + 3, pY + 3, 12, 24);
+  const pGlow = (Math.sin(hardcoreTime * 5) + 1) * 0.5;
+  ctx.save();
+  ctx.shadowColor = '#d500f9';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = `rgba(156, 39, 176, ${0.7 + pGlow * 0.3})`;
+  ctx.fillRect(pX + 3, pY + 3, 12, 24);
+  ctx.restore();
+
+  // === SMALL RUINED PILLAR (right side) ===
+  const rX = W * 0.82;
+  ctx.fillStyle = '#120003';
+  ctx.fillRect(rX, groundY - 50, 20, 50);
+  ctx.fillRect(rX - 5, groundY - 56, 30, 6);
+  ctx.fillRect(rX - 5, groundY - 60, 10, 4);
+  ctx.fillRect(rX + 15, groundY - 60, 10, 4);
+
+  // === GROUND (NETHERRACK) ===
+  const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
+  groundGrad.addColorStop(0, '#2d0007');
+  groundGrad.addColorStop(0.15, '#220005');
+  groundGrad.addColorStop(1, '#0e0002');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, groundY, W, H - groundY);
+
+  // Netherrack texture lines
+  ctx.fillStyle = '#350008';
+  for (let i = 0; i < W; i += 20) {
+    const lH = 2 + Math.abs(Math.sin(i * 0.3)) * 3;
+    ctx.fillRect(i, groundY + 1, 14, lH);
+  }
+
+  // === LAVA LAKE (animated with bubbles) ===
+  const lavaY = groundY + 2;
+  const lavaW = W * 0.25;
+  const lavaX = W * 0.55;
+  const lGrad = ctx.createLinearGradient(lavaX, lavaY, lavaX, H);
+  lGrad.addColorStop(0, '#ff5722');
+  lGrad.addColorStop(0.3, '#ff9100');
+  lGrad.addColorStop(0.7, '#e65100');
+  lGrad.addColorStop(1, '#bf360c');
+  ctx.fillStyle = lGrad;
+  ctx.fillRect(lavaX, lavaY, lavaW, H - lavaY);
+  // Lava surface shimmer
+  const shimmer = (Math.sin(hardcoreTime * 4) + 1) * 0.5;
+  ctx.fillStyle = `rgba(255, 213, 79, ${0.3 + shimmer * 0.25})`;
+  ctx.fillRect(lavaX + 5, lavaY, lavaW - 10, 3);
+  // Lava glow
+  ctx.save();
+  ctx.shadowColor = '#ff6d00';
+  ctx.shadowBlur = 25;
+  ctx.fillStyle = 'rgba(255, 109, 0, 0.01)';
+  ctx.fillRect(lavaX, lavaY, lavaW, 1);
+  ctx.restore();
+
+  // Lava Bubbles
+  if (hardcoreLavaBubbles.length < 5) {
+    hardcoreLavaBubbles.push({
+      x: lavaX + 10 + Math.random() * (lavaW - 20),
+      y: lavaY + 6 + Math.random() * 20,
+      size: Math.random() * 5 + 3,
+      life: 1.0,
+      speed: 0.01 + Math.random() * 0.01
+    });
+  }
+  for (let i = hardcoreLavaBubbles.length - 1; i >= 0; i--) {
+    const b = hardcoreLavaBubbles[i];
+    b.life -= b.speed;
+    const bSize = b.size * (0.5 + b.life * 0.5);
+    if (b.life <= 0) {
+      hardcoreLavaBubbles.splice(i, 1);
+      continue;
+    }
+    ctx.fillStyle = `rgba(255, 200, 50, ${b.life * 0.7})`;
+    ctx.fillRect(b.x, b.y - (1 - b.life) * 8, bSize, bSize);
+  }
+
+  // === SOUL SAND PATCHES WITH BLUE SOUL FIRE ===
+  ctx.fillStyle = '#3e2723';
+  ctx.fillRect(W * 0.15, groundY, 40, H - groundY);
+  ctx.fillStyle = '#4e342e';
+  ctx.fillRect(W * 0.15 + 4, groundY + 3, 12, 5);
+  ctx.fillRect(W * 0.15 + 22, groundY + 6, 10, 4);
+  const soulFire1 = (Math.sin(hardcoreTime * 6) + 1) * 0.5;
+  ctx.save();
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = `rgba(0, 229, 255, ${0.7 + soulFire1 * 0.3})`;
+  ctx.fillRect(W * 0.15 + 14, groundY - 14 - soulFire1 * 4, 5, 14 + soulFire1 * 4);
+  ctx.fillStyle = `rgba(128, 255, 255, ${0.6 + soulFire1 * 0.3})`;
+  ctx.fillRect(W * 0.15 + 15, groundY - 8, 3, 7);
+  ctx.fillRect(W * 0.15 + 10, groundY - 8 - soulFire1 * 2, 4, 8);
+  ctx.fillRect(W * 0.15 + 20, groundY - 6 - soulFire1 * 3, 3, 6);
+  ctx.restore();
+
+  // Soul sand patch 2
+  ctx.fillStyle = '#3e2723';
+  ctx.fillRect(W * 0.88, groundY, 35, H - groundY);
+  const soulFire2 = (Math.sin(hardcoreTime * 5 + 2) + 1) * 0.5;
+  ctx.save();
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = `rgba(0, 229, 255, ${0.65 + soulFire2 * 0.3})`;
+  ctx.fillRect(W * 0.88 + 12, groundY - 11 - soulFire2 * 3, 4, 11 + soulFire2 * 3);
+  ctx.fillStyle = `rgba(128, 255, 255, ${0.5 + soulFire2 * 0.3})`;
+  ctx.fillRect(W * 0.88 + 13, groundY - 6, 2, 5);
+  ctx.restore();
+
+  // === GLOWSTONE CLUSTERS (ceiling) ===
+  const glowPulse = (Math.sin(hardcoreTime * 2) + 1) * 0.5;
+  ctx.save();
+  ctx.shadowColor = '#ffab00';
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = `rgba(255, 171, 0, ${0.75 + glowPulse * 0.25})`;
+  ctx.fillRect(W * 0.35, 6, 14, 10);
+  ctx.fillRect(W * 0.35 + 4, 16, 8, 6);
+  ctx.fillRect(W * 0.75, 10, 10, 8);
+  ctx.fillRect(W * 0.75 - 4, 14, 6, 6);
+  ctx.restore();
+  ctx.fillStyle = '#ffd54f';
+  ctx.fillRect(W * 0.35 + 2, 8, 4, 4);
+  ctx.fillRect(W * 0.75 + 2, 12, 4, 4);
+
+  // === FLOATING GHAST MOB ===
+  if (hardcoreGhastX === 0) hardcoreGhastX = W * 0.55;
+  if (hardcoreGhastY === 0) hardcoreGhastY = H * 0.35;
+  hardcoreGhastX += hardcoreGhastDir * 0.3;
+  hardcoreGhastY += Math.sin(hardcoreTime * 2) * 0.3;
+  if (hardcoreGhastX > W * 0.85) hardcoreGhastDir = -1;
+  if (hardcoreGhastX < W * 0.45) hardcoreGhastDir = 1;
+
+  ctx.save();
+  const gX = hardcoreGhastX;
+  const gY = hardcoreGhastY;
+  ctx.fillStyle = '#e0e0e0';
+  ctx.fillRect(gX - 16, gY - 16, 32, 32);
+  ctx.fillStyle = '#bdbdbd';
+  ctx.fillRect(gX - 16, gY + 8, 32, 8);
+  ctx.fillStyle = '#212121';
+  ctx.fillRect(gX - 10, gY - 8, 5, 7);
+  ctx.fillRect(gX + 5, gY - 8, 5, 7);
+  ctx.fillRect(gX - 4, gY + 2, 8, 4);
+  ctx.fillStyle = '#ccc';
+  const tentWave = Math.sin(hardcoreTime * 4) * 3;
+  for (let t = -12; t <= 12; t += 8) {
+    const tLen = 14 + Math.sin(t + hardcoreTime * 3) * 6;
+    ctx.fillRect(gX + t, gY + 16, 3, tLen + tentWave);
+  }
+  ctx.restore();
+
+  // === PIGLIN BRUTE MOB (walking on ground) ===
+  if (hardcorePiglinX === 0) hardcorePiglinX = W * 0.65;
+  hardcorePiglinLeg += 0.06;
+  hardcorePiglinX += hardcorePiglinDir * 0.5;
+  if (hardcorePiglinX > W * 0.78) hardcorePiglinDir = -1;
+  if (hardcorePiglinX < W * 0.5) hardcorePiglinDir = 1;
+
+  ctx.save();
+  const ppX = hardcorePiglinX;
+  const ppY = groundY;
+  const s = 2.2;
+  const legOff1 = Math.sin(hardcorePiglinLeg) * 3;
+  const legOff2 = Math.sin(hardcorePiglinLeg + Math.PI) * 3;
+  ctx.translate(ppX, ppY);
+  if (hardcorePiglinDir < 0) ctx.scale(-1, 1);
+  // Head
+  ctx.fillStyle = '#e8a0a0';
+  ctx.fillRect(-4 * s, -26 * s, 8 * s, 8 * s);
+  ctx.fillStyle = '#d48888';
+  ctx.fillRect(-2 * s, -22 * s, 4 * s, 3 * s);
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(-3 * s, -24 * s, 2 * s, 2 * s);
+  ctx.fillRect(1 * s, -24 * s, 2 * s, 2 * s);
+  ctx.fillStyle = '#cc8080';
+  ctx.fillRect(-5 * s, -27 * s, 2 * s, 4 * s);
+  ctx.fillRect(3 * s, -27 * s, 2 * s, 4 * s);
+  // Body
+  ctx.fillStyle = '#c8a000';
+  ctx.fillRect(-3 * s, -18 * s, 6 * s, 10 * s);
+  ctx.fillStyle = '#b08900';
+  ctx.fillRect(-3 * s, -18 * s, 6 * s, 2 * s);
+  // Arm + axe
+  ctx.fillStyle = '#e8a0a0';
+  ctx.fillRect(3 * s, -17 * s, 5 * s, 2 * s);
+  ctx.fillStyle = '#c8a000';
+  ctx.fillRect(7 * s, -20 * s, 2 * s, 8 * s);
+  ctx.fillStyle = '#ffd600';
+  ctx.fillRect(8 * s, -20 * s, 3 * s, 4 * s);
+  // Legs
+  ctx.fillStyle = '#8b6914';
+  ctx.fillRect(-2.5 * s + legOff1, -8 * s, 2.5 * s, 8 * s);
+  ctx.fillRect(0.2 * s + legOff2, -8 * s, 2.5 * s, 8 * s);
+  ctx.restore();
+
+  // === RISING ASH & EMBER PARTICLES ===
+  if (hardcoreEmbers.length < 60) {
+    hardcoreEmbers.push({
+      x: Math.random() * W,
+      y: H + Math.random() * 20,
+      size: Math.random() * 3 + 1.5,
+      speedY: Math.random() * 1.8 + 0.6,
+      speedX: (Math.random() - 0.5) * 0.8,
+      opacity: Math.random() * 0.6 + 0.2,
+      pulse: Math.random() * Math.PI,
+      color: Math.random() > 0.4 ? '#ff1744' : (Math.random() > 0.5 ? '#ff9100' : '#757575')
+    });
+  }
+
+  for (let i = hardcoreEmbers.length - 1; i >= 0; i--) {
+    const p = hardcoreEmbers[i];
+    p.y -= p.speedY;
+    p.x += p.speedX + Math.sin(p.pulse) * 0.4;
+    p.pulse += 0.05;
+    p.opacity -= 0.003;
+    if (p.opacity <= 0 || p.y < -10) {
+      hardcoreEmbers.splice(i, 1);
+      continue;
+    }
+    ctx.save();
+    ctx.globalAlpha = p.opacity;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), Math.floor(p.size), Math.floor(p.size));
+    ctx.restore();
+  }
+
+  // === CRIMSON SPORE PARTICLES (drifting sideways) ===
+  if (hardcoreAshParticles.length < 25) {
+    hardcoreAshParticles.push({
+      x: Math.random() * W,
+      y: Math.random() * groundY,
+      speedX: (Math.random() - 0.5) * 0.6,
+      speedY: Math.random() * 0.3 - 0.1,
+      opacity: Math.random() * 0.5 + 0.15,
+      size: Math.random() * 2.5 + 1,
+      isWarped: Math.random() > 0.7
+    });
+  }
+
+  for (let i = hardcoreAshParticles.length - 1; i >= 0; i--) {
+    const sp = hardcoreAshParticles[i];
+    sp.x += sp.speedX;
+    sp.y += sp.speedY;
+    sp.opacity -= 0.001;
+    if (sp.opacity <= 0 || sp.x < -10 || sp.x > W + 10 || sp.y < -10 || sp.y > groundY) {
+      hardcoreAshParticles.splice(i, 1);
+      continue;
+    }
+    ctx.save();
+    ctx.globalAlpha = sp.opacity;
+    ctx.fillStyle = sp.isWarped ? '#26c6da' : '#ef5350';
+    ctx.fillRect(Math.floor(sp.x), Math.floor(sp.y), Math.ceil(sp.size), Math.ceil(sp.size));
+    ctx.restore();
+  }
+}
+
 // Change Modpack Theme & View
 function switchModpack(packKey) {
   if (launcherState !== 'ready') return; // block switching while installing/running
@@ -1926,6 +2345,7 @@ function switchModpack(packKey) {
   else if (packKey === 'democky_edition') activeTheme = 'theme-democky';
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
   else if (packKey === 'vanilla_plus') activeTheme = 'theme-vanilla';
+  else if (packKey === 'hardcore_1_9') activeTheme = 'theme-hardcore';
   
   // Re-initialize particles on theme change (clears old ones and respawns them)
   initParticles();
@@ -1945,6 +2365,23 @@ function switchModpack(packKey) {
   document.querySelectorAll('.modpack-item').forEach(item => {
     item.classList.toggle('active', item.dataset.pack === packKey);
   });
+
+  // Hide Installed Version and Server pills for Hardcore 1.9.4
+  const installedVerPill = document.getElementById('stat-pill-installed-version');
+  const serverPill = document.getElementById('stat-pill-server');
+  if (packKey === 'hardcore_1_9') {
+    if (installedVerPill) installedVerPill.style.display = 'none';
+    if (serverPill) serverPill.style.display = 'none';
+  } else {
+    if (installedVerPill) installedVerPill.style.display = '';
+    if (serverPill) serverPill.style.display = '';
+  }
+
+  // Save selected modpack preference automatically
+  if (configSettings) {
+    configSettings.selectedPack = packKey;
+    window.api.saveSettings(configSettings).catch(e => console.warn('Failed to save selected pack preference:', e));
+  }
 
   // Fetch local version info
   updateVersionCheck();
@@ -2281,15 +2718,44 @@ if (openInstancesBtn) {
 // Modpack Settings Modal Logic
 let editingPackSettings = null;
 
-function openPackSettings(packKey) {
+async function openPackSettings(packKey) {
   editingPackSettings = packKey;
   const details = packDetails[packKey];
   if (packSettingsTitle && details) {
     packSettingsTitle.textContent = `${details.title} Configuration`;
   }
   
+  // Disable Reset & Delete buttons if modpack is not installed
+  try {
+    const info = await window.api.checkUpdates(packKey);
+    const isInstalled = info && info.localVersion && info.localVersion !== 'none';
+    if (packSettingsResetBtn) {
+      packSettingsResetBtn.disabled = !isInstalled;
+      packSettingsResetBtn.title = isInstalled ? 'Reset all options of this modpack to default' : 'Modpack is not installed';
+    }
+    if (packSettingsDeleteBtn) {
+      packSettingsDeleteBtn.disabled = !isInstalled;
+      packSettingsDeleteBtn.title = isInstalled ? 'Delete this modpack completely' : 'Modpack is not installed';
+    }
+  } catch (e) {
+    console.warn('Failed to check installation status for pack settings buttons:', e);
+  }
+
+  const shadersTitleEl = document.getElementById('pack-shaders-title');
+  const shadersSubEl = document.getElementById('pack-shaders-subtitle');
+  const isOptiFine = packKey === 'hardcore_1_9' || (details && (details.loader || '').toLowerCase().includes('optifine'));
+
+  if (shadersTitleEl) {
+    shadersTitleEl.textContent = isOptiFine ? 'OptiFine Shaders Support' : 'Shader Support (Iris / Oculus)';
+  }
+  if (shadersSubEl) {
+    shadersSubEl.textContent = isOptiFine 
+      ? 'Enables shaders. Uses built-in OptiFine shaderpacks manager.' 
+      : 'Enables shaders. Installs Iris (Fabric) or Oculus (Forge).';
+  }
+
   if (!configSettings.addons) configSettings.addons = {};
-  if (!configSettings.addons[packKey]) configSettings.addons[packKey] = { shaders: false };
+  if (!configSettings.addons[packKey]) configSettings.addons[packKey] = { shaders: isOptiFine ? true : false };
   
   const packAddons = configSettings.addons[packKey];
   if (packSettingsShaders) {
@@ -2305,8 +2771,15 @@ function openPackSettings(packKey) {
     if (installedShadersContainer) installedShadersContainer.style.display = 'none';
   }
 
-  // Switch to addons tab initially
-  switchSettingsTab('addons');
+  // If OptiFine pack, hide Addons tab since shaders/addons are native to OptiFine
+  const tabBtnAddonsEl = document.getElementById('tab-btn-addons');
+  if (isOptiFine) {
+    if (tabBtnAddonsEl) tabBtnAddonsEl.style.display = 'none';
+    switchSettingsTab('options');
+  } else {
+    if (tabBtnAddonsEl) tabBtnAddonsEl.style.display = 'block';
+    switchSettingsTab('addons');
+  }
 
   if (packSettingsModal) {
     packSettingsModal.classList.remove('hidden');
@@ -3288,8 +3761,11 @@ async function initApp() {
   // Sort modpacks based on last played initially
   sortModpacks();
 
-  // Switch to default modpack (Stranded)
-  switchModpack('stranded_at_sea');
+  // Switch to last selected modpack from saved settings (fallback to stranded_at_sea)
+  const initialPack = (configSettings && configSettings.selectedPack && packDetails[configSettings.selectedPack])
+    ? configSettings.selectedPack
+    : 'stranded_at_sea';
+  switchModpack(initialPack);
 }
 
 // Sort modpacks in the UI

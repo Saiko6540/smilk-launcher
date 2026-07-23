@@ -1,6 +1,6 @@
 {
   "name": "smilk-launcher",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Custom Minecraft Launcher with dynamic animated themes",
   "main": "main.js",
   "scripts": {
@@ -14,7 +14,8 @@
       "output": "dist"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "artifactName": "smilk-Setup-${version}.${ext}"
     },
     "publish": [
       {

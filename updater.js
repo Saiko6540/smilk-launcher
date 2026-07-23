@@ -118,35 +118,62 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   console.log(`Checking updates for ${packKey} from ${configUrl}`);
   sendProgress({ status: 'checking', message: 'Checking for updates...' });
 
+  const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders) || false;
+
+  // --- VANILLA / NO-MRPACK MODE ---
+  if (configUrl === 'vanilla') {
+    const finalConfig = {
+      version: '1.0.0',
+      packVersion: '1.0.0',
+      commitMessage: 'Vanilla/Optifine Instance',
+      minecraft: settings.mcVersion || '1.9',
+      loader: settings.loader || 'optifine-1.9',
+      addons: { shaders: targetShaders }
+    };
+    
+    fs.mkdirSync(instanceDir, { recursive: true });
+    const localVersionFile = path.join(instanceDir, 'local_version.json');
+    fs.writeFileSync(localVersionFile, JSON.stringify(finalConfig, null, 2), 'utf8');
+    
+    console.log(`Initialized vanilla instance for ${packKey}`);
+    sendProgress({ status: 'ready', message: `Ready to play (Vanilla)`, config: finalConfig });
+    return finalConfig;
+  }
+  // --------------------------------
+
   let remoteConfig;
 
-  // Auto-resolve github branch URLs to .mrpack files
-  const treeMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/tree\/([^\/]+)/);
-  if (treeMatch) {
+  // Dynamic Auto-resolve for any GitHub URL (branch/tree/raw) to find whatever .mrpack file exists on that branch
+  const ghMatch = configUrl.match(/(?:github\.com\/([^\/]+)\/([^\/]+)\/(?:tree|raw)\/([^\/]+))|(?:raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+))/);
+  if (ghMatch) {
     try {
-      const [_, owner, repo, branch] = treeMatch;
-      const safeBranch = encodeURIComponent(decodeURIComponent(branch));
-      const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${safeBranch}`;
-      
-      const treeRes = await new Promise((resolve, reject) => {
+      const owner = ghMatch[1] || ghMatch[4];
+      const repo = ghMatch[2] || ghMatch[5];
+      const branch = ghMatch[3] || ghMatch[6];
+      if (owner && repo && branch) {
+        const safeBranch = encodeURIComponent(decodeURIComponent(branch));
+        const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${safeBranch}?recursive=1`;
+        
+        const treeRes = await new Promise((resolve, reject) => {
           https.get(treeUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
-              let data = '';
-              res.on('data', chunk => data += chunk);
-              res.on('end', () => resolve(JSON.parse(data)));
-          }).on('error', reject);
-      });
-      
-      if (treeRes && treeRes.tree) {
-        const file = treeRes.tree.find(f => f.path.endsWith('.mrpack'));
-        if (file) {
-          configUrl = `https://github.com/${owner}/${repo}/raw/${branch}/${encodeURIComponent(file.path)}`;
-          console.log(`Auto-resolved configUrl to: ${configUrl}`);
-        } else {
-          throw new Error("No .mrpack file found in the branch!");
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+              try { resolve(JSON.parse(data)); } catch(e) { resolve(null); }
+            });
+          }).on('error', () => resolve(null));
+        });
+        
+        if (treeRes && treeRes.tree && Array.isArray(treeRes.tree)) {
+          const mrpackFile = treeRes.tree.find(f => f.path.toLowerCase().endsWith('.mrpack'));
+          if (mrpackFile) {
+            configUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${mrpackFile.path.split('/').map(encodeURIComponent).join('/')}`;
+            console.log(`Auto-resolved branch '${branch}' .mrpack file to: ${configUrl}`);
+          }
         }
       }
     } catch (err) {
-      console.warn("Failed to auto-resolve branch URL", err);
+      console.warn("Failed to auto-resolve branch URL for .mrpack file:", err);
     }
   }
   if (configUrl.endsWith('.mrpack')) {
@@ -220,7 +247,6 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
 
   // Compare version and addons state
   const localShaders = localConfig?.addons?.shaders || false;
-  const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders) || false;
 
   if (localConfig && localConfig.version === remoteConfig.version) {
     // Backport missing versionId/commitMessage metadata retroactively

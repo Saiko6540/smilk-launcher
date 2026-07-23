@@ -7,34 +7,62 @@ const { Client, Authenticator } = require('minecraft-launcher-core');
 /**
  * Helper to download a file (used for loader downloading)
  */
-function downloadFile(url, destPath) {
+/**
+ * Helper to download a file (used for loader downloading)
+ */
+function downloadFile(url, destPath, options = {}) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
     const file = fs.createWriteStream(destPath);
-    https.get(url, (response) => {
-      if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download: Status Code ${response.statusCode}`));
-        return;
-      }
-      response.pipe(file);
-      file.on('finish', () => {
+    
+    const requestOptions = {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      ...options
+    };
+
+    const doReq = (curUrl) => {
+      https.get(curUrl, requestOptions, (response) => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          let loc = response.headers.location;
+          if (loc.startsWith('/')) {
+            const u = new URL(curUrl);
+            loc = `${u.protocol}//${u.host}${loc}`;
+          }
+          doReq(loc);
+          return;
+        }
+
+        if (response.statusCode !== 200) {
+          file.close();
+          fs.unlink(destPath, () => {});
+          reject(new Error(`Failed to download: Status Code ${response.statusCode}`));
+          return;
+        }
+        response.pipe(file);
+        file.on('finish', () => {
+          file.close();
+          resolve();
+        });
+      }).on('error', (err) => {
         file.close();
-        resolve();
+        fs.unlink(destPath, () => {});
+        reject(err);
       });
-    }).on('error', (err) => {
-      file.close();
-      fs.unlink(destPath, () => {});
-      reject(err);
-    });
+    };
+
+    doReq(url);
   });
 }
 
 /**
  * Helper to fetch text content
  */
-function fetchText(url) {
+function fetchText(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+    const opts = {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', ...headers }
+    };
+    https.get(url, opts, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`Failed to fetch text: Status Code ${res.statusCode}`));
         return;
@@ -76,6 +104,69 @@ function runCommand(cmd, args, options = {}) {
       reject(err);
     });
   });
+}
+
+/**
+ * Installs OptiFine standalone version profile JSON and libraries
+ */
+async function installOptiFine(mcVersion, instanceDir, sendProgress) {
+  const optifineVer = mcVersion === '1.9.4' ? '1.9.4_HD_U_I5' : (mcVersion === '1.9' ? '1.9_HD_U_I5' : `${mcVersion}_HD_U_I5`);
+  const customVersionId = `${mcVersion}-OptiFine_${optifineVer}`;
+  const versionDir = path.join(instanceDir, 'versions', customVersionId);
+  const jsonPath = path.join(versionDir, `${customVersionId}.json`);
+  const optifineLibDir = path.join(instanceDir, 'libraries', 'optifine', 'OptiFine', optifineVer);
+  const optifineJarPath = path.join(optifineLibDir, `OptiFine-${optifineVer}.jar`);
+
+  if (!fs.existsSync(jsonPath) || !fs.existsSync(optifineJarPath)) {
+    sendProgress({ status: 'installing_loader', message: `Downloading OptiFine ${mcVersion}...` });
+    fs.mkdirSync(versionDir, { recursive: true });
+    fs.mkdirSync(optifineLibDir, { recursive: true });
+
+    // Download OptiFine jar from optifine.net
+    const adUrl = `https://optifine.net/adloadx?f=OptiFine_${optifineVer}.jar`;
+    const html = await fetchText(adUrl);
+    const match = html.match(/href='(downloadx\?[^']+)'/);
+    if (!match) {
+      throw new Error('Could not parse OptiFine download URL');
+    }
+    const dlUrl = 'https://optifine.net/' + match[1];
+    await downloadFile(dlUrl, optifineJarPath);
+
+    // Extract launchwrapper-of-2.2.jar from OptiFine jar into libraries/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar
+    try {
+      const AdmZip = require('adm-zip');
+      const lwDestDir = path.join(instanceDir, 'libraries', 'net', 'minecraft', 'launchwrapper', '1.12');
+      const lwDestPath = path.join(lwDestDir, 'launchwrapper-1.12.jar');
+      fs.mkdirSync(lwDestDir, { recursive: true });
+
+      const zip = new AdmZip(optifineJarPath);
+      const entry = zip.getEntry('launchwrapper-of-2.2.jar') || zip.getEntries().find(e => e.entryName.includes('launchwrapper'));
+      if (entry) {
+        fs.writeFileSync(lwDestPath, zip.readFile(entry));
+        console.log(`Extracted bundled LaunchWrapper from OptiFine to ${lwDestPath}`);
+      }
+    } catch (e) {
+      console.warn('Failed to extract LaunchWrapper from OptiFine jar:', e);
+    }
+
+    // Generate custom version JSON
+    const profileJson = {
+      id: customVersionId,
+      inheritsFrom: mcVersion,
+      time: new Date().toISOString(),
+      releaseTime: new Date().toISOString(),
+      type: "release",
+      mainClass: "net.minecraft.launchwrapper.Launch",
+      minecraftArguments: "--username ${auth_player_name} --version ${version_name} --gameDir ${game_directory} --assetsDir ${assets_root} --assetIndex ${assets_index_name} --uuid ${auth_uuid} --accessToken ${auth_access_token} --userType ${user_type} --tweakClass optifine.OptiFineTweaker",
+      libraries: [
+        { name: `optifine:OptiFine:${optifineVer}` },
+        { name: "net.minecraft:launchwrapper:1.12" }
+      ]
+    };
+    fs.writeFileSync(jsonPath, JSON.stringify(profileJson, null, 2), 'utf8');
+  }
+
+  return customVersionId;
 }
 
 /**
@@ -237,6 +328,9 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     const forgeVersion = loaderString.substring('forge-'.length);
     sendProgress({ status: 'installing_loader', message: 'Preparing Forge Loader...' });
     customVersionId = await installForge(mcVersion, forgeVersion, instanceDir, javaPath, sendProgress);
+  } else if (loaderString && loaderString.startsWith('optifine')) {
+    sendProgress({ status: 'installing_loader', message: 'Preparing OptiFine Loader...' });
+    customVersionId = await installOptiFine(mcVersion, instanceDir, sendProgress);
   }
 
   sendProgress({ status: 'launching', message: 'Launching Minecraft...' });
@@ -324,9 +418,11 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
       // MCLC doesn't automatically add it for custom profiles
       // Fix: copy the real vanilla jar over the dummy profile jar
       // MCLC will automatically append the custom profile jar to the classpath!
-      const customJarPath = path.join(instanceDir, 'versions', customVersionId, `${customVersionId}.jar`);
-      if (fs.existsSync(vanillaJarPath)) {
-        fs.copyFileSync(vanillaJarPath, customJarPath);
+      if (!customVersionId.includes('OptiFine')) {
+        const customJarPath = path.join(instanceDir, 'versions', customVersionId, `${customVersionId}.jar`);
+        if (fs.existsSync(vanillaJarPath)) {
+          fs.copyFileSync(vanillaJarPath, customJarPath);
+        }
       }
     }
 

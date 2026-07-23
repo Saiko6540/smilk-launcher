@@ -136,3 +136,15 @@ game_data/
 launcher.log
 settings.json
 classpath*.log
+
+# Local Agent & Temporary Directories
+.agents/
+.claude/
+.obsidian_brain/
+.paul/
+agentic-dashboard/
+deploy/
+scratch/
+catalog_debug.log
+*.log
+
