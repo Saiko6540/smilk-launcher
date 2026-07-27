@@ -255,7 +255,9 @@ function checkJavaVersion(javaPath, mcVersion) {
       const mcMinor = parseInt(parts[1], 10);
       const mcPatch = parseInt(parts[2] || '0', 10);
       
-      if (mcMinor >= 21) {
+      if (parts[0] === '26') {
+        minJavaVersion = 25; // 26.2 requires Java 25
+      } else if (mcMinor >= 21) {
         minJavaVersion = 22; // c2me mod in 1.21.1 requires Java 22 Vector API
       } else if (mcMinor === 20 && mcPatch >= 5) {
         minJavaVersion = 21;
@@ -285,12 +287,20 @@ function checkJavaVersion(javaPath, mcVersion) {
         } else {
           major = parseInt(versionStr.split('.')[0], 10);
         }
+        
         if (major > 0 && major < minJavaVersion) {
           const err = new Error(`Minecraft ${mcVersion} requires Java ${minJavaVersion} or later, but you are using Java ${major}.`);
           err.javaError = true;
           err.requiredVersion = minJavaVersion;
           return reject(err);
         }
+        if (major > 22 && parts[0] !== '26') {
+          const err = new Error(`Java ${major} is too new for older Fabric Loaders. Please use Java 21 or Java 22.`);
+          err.javaError = true;
+          err.requiredVersion = 22;
+          return reject(err);
+        }
+        
         resolve(major);
       } else {
         // Could not parse, just resolve to allow launching
@@ -298,6 +308,50 @@ function checkJavaVersion(javaPath, mcVersion) {
       }
     });
   });
+}
+
+async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
+  const javaDir = path.join(userDataPath, 'game_data', 'java', `jre-${targetVersion}`);
+  
+  // Check if we already have it
+  if (fs.existsSync(javaDir)) {
+    const files = fs.readdirSync(javaDir);
+    for (const file of files) {
+      const javaExe = path.join(javaDir, file, 'bin', 'java.exe');
+      if (fs.existsSync(javaExe)) {
+        return javaExe;
+      }
+    }
+  }
+
+  sendProgress({ status: 'installing_java', message: `Downloading compatible Java ${targetVersion}... (this may take a minute)` });
+  fs.mkdirSync(javaDir, { recursive: true });
+
+  const zipPath = path.join(userDataPath, 'game_data', 'java', `jre-${targetVersion}.zip`);
+  
+  // URL for Adoptium Eclipse Temurin JRE (Windows x64)
+  const downloadUrl = `https://api.adoptium.net/v3/binary/latest/${targetVersion}/ga/windows/x64/jre/hotspot/normal/eclipse`;
+  
+  await downloadFile(downloadUrl, zipPath);
+  
+  sendProgress({ status: 'installing_java', message: `Extracting Java ${targetVersion}...` });
+  
+  const AdmZip = require('adm-zip');
+  const zip = new AdmZip(zipPath);
+  zip.extractAllTo(javaDir, true);
+  
+  fs.unlinkSync(zipPath);
+
+  // Find the exact java.exe path
+  const files = fs.readdirSync(javaDir);
+  for (const file of files) {
+    const javaExe = path.join(javaDir, file, 'bin', 'java.exe');
+    if (fs.existsSync(javaExe)) {
+      return javaExe;
+    }
+  }
+  
+  throw new Error(`Failed to locate java.exe after extracting Java ${targetVersion}.`);
 }
 
 /**
@@ -317,7 +371,23 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
 
   // Check Java version
   sendProgress({ status: 'checking', message: 'Checking Java version...' });
-  await checkJavaVersion(finalJavaPath, mcVersion);
+  try {
+    await checkJavaVersion(finalJavaPath, mcVersion);
+  } catch (err) {
+    if (err.javaError) {
+      const targetVersion = err.requiredVersion || 21;
+      console.log(`Java check failed, attempting to auto-install Java ${targetVersion}:`, err.message);
+      try {
+        const userDataPath = path.resolve(instanceDir, '../../..');
+        finalJavaPath = await ensureJava(userDataPath, sendProgress, targetVersion);
+        console.log(`Successfully installed and using portable Java ${targetVersion}:`, finalJavaPath);
+      } catch (installErr) {
+        throw new Error(`${err.message} (Auto-install failed: ${installErr.message})`);
+      }
+    } else {
+      throw err;
+    }
+  }
 
   // Process loader
   if (loaderString && loaderString.startsWith('fabric-')) {
@@ -377,7 +447,7 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
 
   launcher.on('progress', (e) => {
     // Download progress of libraries/assets
-    const percent = Math.round((e.task / e.total) * 100);
+    const percent = (e.total && e.total > 0) ? Math.round((e.task / e.total) * 100) : 0;
     sendProgress({
       status: 'downloading_assets',
       message: `Verifying game files: ${e.type} (${e.task}/${e.total})`,
@@ -402,7 +472,7 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
         
         // Forward progress events
         vanillaLauncher.on('progress', (e) => {
-          const percent = Math.round((e.task / e.total) * 100);
+          const percent = (e.total && e.total > 0) ? Math.round((e.task / e.total) * 100) : 0;
           sendProgress({ status: 'downloading_assets', message: `Verifying base game files: ${e.type} (${e.task}/${e.total})`, progress: percent });
         });
 

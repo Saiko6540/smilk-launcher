@@ -106,16 +106,20 @@ const modpacks = {
       mrpack_url: 'mock://vanilla_plus/pack.mrpack'
     }
   },
-  hardcore_1_9: {
-    name: 'Hardcore 1.9.4 (Limited)',
-    mcVersion: '1.9.4',
-    loader: 'optifine-1.9.4',
+  fabric_26_2: {
+    name: 'Vanilla 26.2',
+    mcVersion: '26.2',
+    loader: 'fabric-0.19.3',
     configUrl: 'vanilla',
+    extraMods: [
+      'https://cdn.modrinth.com/data/AANobbMI/versions/2Yom1N68/sodium-fabric-0.9.1%2Bmc26.2.jar',
+      'https://cdn.modrinth.com/data/YL57xq9U/versions/oaD6KQls/iris-fabric-1.11.2%2Bmc26.2.jar'
+    ],
     mockConfig: {
       version: '1.0.0',
-      minecraft: '1.9.4',
-      loader: 'optifine-1.9.4',
-      mrpack_url: 'mock://hardcore_1_9/pack.mrpack'
+      minecraft: '26.2',
+      loader: 'fabric-0.19.3',
+      mrpack_url: 'mock://fabric_26_2/pack.mrpack'
     }
   }
 };
@@ -300,9 +304,16 @@ ipcMain.handle('load-settings', () => {
       const loaded = JSON.parse(data);
       // Merge with defaults to ensure all keys exist
       loadedSettings = { ...defaultSettings, ...loaded };
+      if (!modpacks[loadedSettings.selectedPack]) {
+        loadedSettings.selectedPack = null;
+      }
     } catch (e) {
       console.error('Error loading settings, returning defaults:', e);
     }
+  }
+
+  if (loadedSettings.selectedPack && !modpacks[loadedSettings.selectedPack]) {
+    loadedSettings.selectedPack = null;
   }
 
   return { settings: loadedSettings, systemMemoryGb: totalMemGb };
@@ -802,7 +813,7 @@ ipcMain.handle('start-update', async (event, packKey) => {
 
   // Run real update
   try {
-    const extendedSettings = { ...settings, mcVersion: pack.mcVersion, loader: pack.loader };
+    const extendedSettings = { ...settings, mcVersion: pack.mcVersion, loader: pack.loader, extraMods: pack.extraMods };
     await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress, extendedSettings);
     return { success: true };
   } catch (err) {

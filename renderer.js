@@ -28,11 +28,11 @@ const packDetails = {
     loader: 'Fabric-0.16.5',
     serverIp: '185.206.149.27:25601'
   },
-  hardcore_1_9: {
-    title: 'Hardcore 1.9.4 (Limited)',
-    description: 'Hardcore 1.9.4 event mode with OptiFine shaders. Survival with a twist: dying results in a 1-hour ban from the server!',
-    mcVersion: '1.9.4',
-    loader: 'OptiFine-1.9.4',
+  fabric_26_2: {
+    title: 'Vanilla 26.2',
+    description: 'A custom Fabric modpack containing Sodium, Iris, and Sodium Extra for ultimate performance and shaders support.',
+    mcVersion: '26.2',
+    loader: 'Fabric-0.16.5',
     serverIp: '185.206.149.27:25601'
   }
 };
@@ -205,8 +205,8 @@ window.showCustomConfirm = function(message, title = 'Confirmation', type = 'war
   return showCustomDialog({ message, type, title, showCancel: true, confirmText });
 };
 // Active Launcher State
-let activePack = 'cobblemon';
-let activeTheme = 'theme-cobblemon';
+let activePack = 'fabric_26_2';
+let activeTheme = 'theme-fabric26';
 let launcherState = 'ready'; // ready, updating, launching, playing, error
 let configSettings = {};
 let hideTimeout = null;
@@ -1117,9 +1117,325 @@ function animate() {
     drawPokemonScene();
   } else if (activeTheme === 'theme-vanilla') {
     drawVanillaScene();
-  } else if (activeTheme === 'theme-hardcore') {
-    drawHardcoreScene();
+  } else if (activeTheme === 'theme-fabric26') {
+    drawFabric26Scene();
   }
+}
+
+// ============ VANILLA 26.2 - CHERRY BLOSSOM BIOME ============
+let mc26Time = 0;
+let cherryPetals = [];
+let cherryTrees = [];
+let cherryFlowers = [];
+let cherryInitialized = false;
+
+class CherryPetal {
+  constructor(W, H) {
+    this.reset(W, H, true);
+  }
+  reset(W, H, initial) {
+    this.x = Math.random() * W;
+    this.y = initial ? Math.random() * H : -10;
+    this.size = 2 + Math.random() * 3;
+    this.speedY = 0.3 + Math.random() * 0.6;
+    this.speedX = -0.2 + Math.random() * 0.4;
+    this.wobbleAmp = 15 + Math.random() * 25;
+    this.wobbleSpeed = 0.5 + Math.random() * 1.5;
+    this.wobblePhase = Math.random() * Math.PI * 2;
+    this.rot = Math.random() * Math.PI * 2;
+    this.rotSpeed = (Math.random() - 0.5) * 0.03;
+    this.alpha = 0.4 + Math.random() * 0.5;
+    // Petal colors: various pinks
+    const pinks = ['#ffb7c5', '#ffa0b4', '#ff8fa3', '#ffc4d6', '#ffcce0', '#fff0f5'];
+    this.color = pinks[Math.floor(Math.random() * pinks.length)];
+    this.baseX = this.x;
+  }
+  update(W, H) {
+    this.y += this.speedY;
+    this.wobblePhase += 0.015;
+    this.x = this.baseX + Math.sin(this.wobblePhase * this.wobbleSpeed) * this.wobbleAmp;
+    this.baseX += this.speedX;
+    this.rot += this.rotSpeed;
+    if (this.y > H + 10 || this.x < -20 || this.x > W + 20) {
+      this.reset(W, H, false);
+    }
+  }
+  draw(ctx) {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+    ctx.globalAlpha = this.alpha;
+    ctx.fillStyle = this.color;
+    // Pixel-art petal shape (small blocky)
+    const s = this.size;
+    ctx.fillRect(-s, -s/2, s, s);
+    ctx.fillRect(0, -s, s, s);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+}
+
+function initCherryScene(W, H) {
+  // Create cherry trees at fixed positions
+  cherryTrees = [];
+  const treePositions = [0.08, 0.25, 0.5, 0.72, 0.9];
+  treePositions.forEach(px => {
+    cherryTrees.push({
+      x: W * px + (Math.random() - 0.5) * 40,
+      trunkH: 80 + Math.random() * 60,
+      canopyR: 50 + Math.random() * 35,
+      canopyOffsetY: -10 + Math.random() * 10,
+      shade: Math.random()
+    });
+  });
+
+  // Petals
+  cherryPetals = [];
+  for (let i = 0; i < 80; i++) {
+    cherryPetals.push(new CherryPetal(W, H));
+  }
+
+  // Ground flowers
+  cherryFlowers = [];
+  for (let i = 0; i < 30; i++) {
+    cherryFlowers.push({
+      x: Math.random() * W,
+      type: Math.floor(Math.random() * 4), // 0-peony, 1-tulip, 2-small pink, 3-white
+      size: 3 + Math.random() * 3,
+      stemH: 6 + Math.random() * 8
+    });
+  }
+
+  cherryInitialized = true;
+}
+
+function drawCherryTree(ctx, x, groundY, trunkH, canopyW, shade, time) {
+  const B = 16; // Minecraft Block Size (16x16 pixels)
+  
+  // Snap trunk X to block grid
+  const bx = Math.floor(x / B) * B;
+  const blocksHigh = Math.max(4, Math.floor(trunkH / B));
+  const treeTopY = groundY - blocksHigh * B;
+
+  // --- TRUNK (16x16 Wood Log Blocks) ---
+  for (let b = 0; b < blocksHigh; b++) {
+    const logY = groundY - (b + 1) * B;
+    // Log base
+    ctx.fillStyle = '#52361b';
+    ctx.fillRect(bx, logY, B, B);
+    // Log bark texture details (pixel grid)
+    ctx.fillStyle = '#3a2512';
+    ctx.fillRect(bx + 2, logY + 2, 4, B - 4);
+    ctx.fillRect(bx + 10, logY + 4, 3, B - 8);
+    ctx.fillStyle = '#6e4927';
+    ctx.fillRect(bx + 7, logY + 2, 2, B - 4);
+  }
+
+  // --- BRANCHES (90-degree Minecraft log blocks) ---
+  // Left branch
+  const leftBranchY = treeTopY + B * 2;
+  ctx.fillStyle = '#52361b';
+  ctx.fillRect(bx - B, leftBranchY, B, B);
+  ctx.fillRect(bx - B * 2, leftBranchY - B, B, B);
+
+  // Right branch
+  const rightBranchY = treeTopY + B * 3;
+  ctx.fillRect(bx + B, rightBranchY, B, B);
+  ctx.fillRect(bx + B * 2, rightBranchY - B, B, B);
+
+  // --- BLOCKY CANOPY (Minecraft Leaf Block Grid) ---
+  // A helper function to draw a single 16x16 Minecraft Leaf Block
+  const drawLeafBlock = (gx, gy, colorVariant) => {
+    // Base block color
+    const baseColors = ['#ff9bb0', '#ff8fa3', '#ffaec0', '#ff8099'];
+    ctx.fillStyle = baseColors[colorVariant % baseColors.length];
+    ctx.fillRect(gx, gy, B, B);
+
+    // Inner 4x4 sub-pixels texture
+    const darkPixels = ['#e66b82', '#d85870', '#e06078'];
+    const lightPixels = ['#ffc8d6', '#ffdce6', '#ffffff'];
+
+    ctx.fillStyle = darkPixels[(colorVariant + 1) % darkPixels.length];
+    ctx.fillRect(gx + 2, gy + 2, 4, 4);
+    ctx.fillRect(gx + 10, gy + 6, 4, 4);
+    ctx.fillRect(gx + 4, gy + 10, 4, 4);
+
+    ctx.fillStyle = lightPixels[colorVariant % lightPixels.length];
+    ctx.fillRect(gx + 8, gy + 2, 4, 4);
+    ctx.fillRect(gx + 2, gy + 8, 4, 4);
+    ctx.fillRect(gx + 10, gy + 10, 4, 4);
+
+    // Subtle 3D block border shadow (bottom & right edge)
+    ctx.fillStyle = 'rgba(150, 40, 70, 0.25)';
+    ctx.fillRect(gx, gy + B - 2, B, 2);
+    ctx.fillRect(gx + B - 2, gy, 2, B);
+  };
+
+  // Define Minecraft tree foliage layer structure (stepped rectangular blocks)
+  // Layer 0 (Bottom wide layer)
+  const layer0Width = 7; 
+  const startX0 = bx - Math.floor(layer0Width / 2) * B;
+  for (let col = 0; col < layer0Width; col++) {
+    // Omit outer corners for classic Minecraft tree shape
+    if (col === 0 || col === layer0Width - 1) {
+      if ((col + bx) % 2 === 0) continue; 
+    }
+    drawLeafBlock(startX0 + col * B, treeTopY + B, (col * 3 + 1) % 4);
+    drawLeafBlock(startX0 + col * B, treeTopY + B * 2, (col * 5 + 2) % 4);
+  }
+
+  // Layer 1 (Middle layer)
+  const layer1Width = 5;
+  const startX1 = bx - Math.floor(layer1Width / 2) * B;
+  for (let col = 0; col < layer1Width; col++) {
+    drawLeafBlock(startX1 + col * B, treeTopY, (col * 2) % 4);
+    drawLeafBlock(startX1 + col * B, treeTopY - B, (col * 4 + 1) % 4);
+  }
+
+  // Layer 2 (Top cap layer)
+  const layer2Width = 3;
+  const startX2 = bx - Math.floor(layer2Width / 2) * B;
+  for (let col = 0; col < layer2Width; col++) {
+    drawLeafBlock(startX2 + col * B, treeTopY - B * 2, (col * 7 + 3) % 4);
+  }
+
+  // Top peak block
+  drawLeafBlock(bx, treeTopY - B * 3, 0);
+}
+
+function drawFabric26Scene() {
+  mc26Time += 0.005;
+  const W = canvas.width;
+  const H = canvas.height;
+  const groundY = H * 0.68;
+
+  if (!cherryInitialized || cherryTrees.length === 0) {
+    initCherryScene(W, H);
+  }
+
+  // === WARM PINK SKY ===
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
+  skyGrad.addColorStop(0, '#ffe8f0');   // Soft pink top
+  skyGrad.addColorStop(0.3, '#ffd6e0'); // Warmer pink
+  skyGrad.addColorStop(0.6, '#f5c6d0'); // Deeper pink horizon
+  skyGrad.addColorStop(1, '#e8b4be');   // Warm base
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, groundY);
+
+  // === SUN (square, Minecraft style) ===
+  ctx.fillStyle = '#ffe680';
+  const sunX = W * 0.82;
+  const sunY = H * 0.15;
+  const sunSize = 50;
+  ctx.fillRect(sunX - sunSize/2, sunY - sunSize/2, sunSize, sunSize);
+  // Sun glow
+  ctx.fillStyle = 'rgba(255, 230, 128, 0.15)';
+  ctx.fillRect(sunX - sunSize, sunY - sunSize, sunSize * 2, sunSize * 2);
+
+  // === CLOUDS (blocky) ===
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+  const c1x = (mc26Time * 18) % (W + 250) - 120;
+  ctx.fillRect(c1x, H * 0.1, 100, 24);
+  ctx.fillRect(c1x + 15, H * 0.1 - 16, 70, 16);
+  ctx.fillRect(c1x + 50, H * 0.1 - 24, 30, 12);
+
+  ctx.fillStyle = 'rgba(255, 240, 245, 0.5)';
+  const c2x = (mc26Time * 12 + W * 0.4) % (W + 300) - 150;
+  ctx.fillRect(c2x, H * 0.22, 140, 28);
+  ctx.fillRect(c2x + 20, H * 0.22 - 18, 100, 18);
+
+  // === DISTANT HILLS ===
+  ctx.fillStyle = '#c9a0b0';
+  for (let i = 0; i < W; i += 4) {
+    const hillH = 25 + Math.sin(i * 0.008 + 1) * 18 + Math.sin(i * 0.015) * 10;
+    ctx.fillRect(i, groundY - hillH, 4, hillH);
+  }
+  ctx.fillStyle = '#d4aab8';
+  for (let i = 0; i < W; i += 4) {
+    const hillH = 15 + Math.sin(i * 0.012 + 3) * 12 + Math.sin(i * 0.02) * 8;
+    ctx.fillRect(i, groundY - hillH, 4, hillH);
+  }
+
+  // === GROUND ===
+  // Pink-ish grass (Cherry Grove biome)
+  const grassGrad = ctx.createLinearGradient(0, groundY, 0, groundY + 16);
+  grassGrad.addColorStop(0, '#7ab85a');  // Green grass top
+  grassGrad.addColorStop(1, '#5d9940');
+  ctx.fillStyle = grassGrad;
+  ctx.fillRect(0, groundY, W, 16);
+
+  // Dirt
+  ctx.fillStyle = '#8b6141';
+  ctx.fillRect(0, groundY + 16, W, H - groundY - 16);
+
+  // Dirt texture
+  ctx.fillStyle = '#7a5535';
+  for (let i = 0; i < W; i += 20) {
+    for (let j = groundY + 20; j < H; j += 20) {
+      if ((i * 7 + j * 13) % 40 < 15) {
+        ctx.fillRect(i, j, 8, 8);
+      }
+    }
+  }
+  ctx.fillStyle = '#9b7050';
+  for (let i = 8; i < W; i += 24) {
+    for (let j = groundY + 24; j < H; j += 28) {
+      if ((i * 11 + j * 3) % 50 < 12) {
+        ctx.fillRect(i, j, 6, 6);
+      }
+    }
+  }
+
+  // === GRASS BLADES on ground ===
+  const grassColors = ['#6aad3d', '#5d9940', '#78b558', '#4e8a30'];
+  for (let i = 0; i < W; i += 8) {
+    const gc = grassColors[(i * 3) % grassColors.length];
+    ctx.fillStyle = gc;
+    const bh = 4 + Math.sin(i * 0.3 + mc26Time * 2) * 2;
+    ctx.fillRect(i, groundY - bh, 4, bh);
+  }
+
+  // === FLOWERS on ground ===
+  cherryFlowers.forEach(f => {
+    // Stem
+    ctx.fillStyle = '#3a7a22';
+    ctx.fillRect(f.x, groundY - f.stemH, 2, f.stemH);
+    // Flower head
+    if (f.type === 0) {
+      // Pink peony
+      ctx.fillStyle = '#ff8fa3';
+      ctx.fillRect(f.x - f.size/2, groundY - f.stemH - f.size, f.size, f.size);
+      ctx.fillStyle = '#ffb7c5';
+      ctx.fillRect(f.x - f.size/2 + 1, groundY - f.stemH - f.size + 1, f.size - 2, f.size - 2);
+    } else if (f.type === 1) {
+      // Red tulip
+      ctx.fillStyle = '#e84040';
+      ctx.fillRect(f.x - f.size/2, groundY - f.stemH - f.size, f.size, f.size);
+    } else if (f.type === 2) {
+      // Pink small flower
+      ctx.fillStyle = '#ffa0b4';
+      ctx.fillRect(f.x - 2, groundY - f.stemH - 4, 4, 4);
+      ctx.fillStyle = '#ffe0e8';
+      ctx.fillRect(f.x - 1, groundY - f.stemH - 3, 2, 2);
+    } else {
+      // White flower
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(f.x - 2, groundY - f.stemH - 4, 5, 4);
+      ctx.fillStyle = '#ffe066';
+      ctx.fillRect(f.x, groundY - f.stemH - 3, 2, 2);
+    }
+  });
+
+  // === CHERRY TREES ===
+  cherryTrees.forEach(t => {
+    drawCherryTree(ctx, t.x, groundY, t.trunkH, t.canopyR, t.shade, mc26Time);
+  });
+
+  // === FALLING PETALS ===
+  cherryPetals.forEach(p => {
+    p.update(W, H);
+    p.draw(ctx);
+  });
 }
 
 // ============ STRANDED AT SEA — FULL OCEAN SCENE ============
@@ -1923,419 +2239,10 @@ function drawVanillaScene() {
   vanillaMobs.forEach(m => { m.update(); m.draw(groundY); });
 }
 
-// ============ HARDCORE 1.9 — NETHER PIXEL-ART SCENE ============
-let hardcoreTime = 0;
-let hardcoreEmbers = [];
-let hardcoreAshParticles = [];
-let hardcoreLavaBubbles = [];
-let hardcoreGhastY = 0;
-let hardcoreGhastX = 0;
-let hardcoreGhastDir = 1;
-let hardcorePiglinX = 0;
-let hardcorePiglinDir = 1;
-let hardcorePiglinLeg = 0;
-
-function drawHardcoreScene() {
-  hardcoreTime += 0.008;
-  const W = canvas.width;
-  const H = canvas.height;
-  const groundY = H * 0.78;
-
-  // === SKY (DEEP NETHER VOID) ===
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
-  skyGrad.addColorStop(0, '#060001');
-  skyGrad.addColorStop(0.3, '#140004');
-  skyGrad.addColorStop(0.6, '#200006');
-  skyGrad.addColorStop(1, '#350009');
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, W, groundY);
-
-  // === BEDROCK CEILING TEXTURE (top) ===
-  ctx.fillStyle = '#0a0002';
-  for (let i = 0; i < W; i += 16) {
-    const h = 8 + Math.abs(Math.sin(i * 0.14)) * 18;
-    ctx.fillRect(i, 0, 16, h);
-    ctx.fillStyle = '#0e0003';
-    ctx.fillRect(i, h, 16, 4);
-    ctx.fillStyle = '#0a0002';
-  }
-  // Dripping lava from ceiling
-  const dripX1 = (W * 0.25);
-  const dripX2 = (W * 0.6);
-  const dripLen1 = 12 + Math.sin(hardcoreTime * 6) * 8;
-  const dripLen2 = 8 + Math.cos(hardcoreTime * 4) * 6;
-  ctx.fillStyle = '#ff6d00';
-  ctx.fillRect(dripX1, 18, 3, dripLen1);
-  ctx.fillRect(dripX2, 14, 3, dripLen2);
-  ctx.fillStyle = '#ffab00';
-  ctx.fillRect(dripX1, 18 + dripLen1, 3, 3);
-  ctx.fillRect(dripX2, 14 + dripLen2, 3, 3);
-
-  // === SQUARE BLOOD MOON ===
-  const moonX = W * 0.8;
-  const moonY = H * 0.16;
-  const moonS = 28;
-  // Glow
-  ctx.fillStyle = 'rgba(255, 23, 68, 0.12)';
-  ctx.fillRect(moonX - moonS - 10, moonY - moonS - 10, (moonS + 10) * 2, (moonS + 10) * 2);
-  ctx.fillStyle = 'rgba(255, 23, 68, 0.06)';
-  ctx.fillRect(moonX - moonS - 18, moonY - moonS - 18, (moonS + 18) * 2, (moonS + 18) * 2);
-  // Moon body
-  ctx.fillStyle = '#b71c1c';
-  ctx.fillRect(moonX - moonS, moonY - moonS, moonS * 2, moonS * 2);
-  // Moon craters (blocky)
-  ctx.fillStyle = '#8b0000';
-  ctx.fillRect(moonX - 15, moonY - 12, 10, 8);
-  ctx.fillRect(moonX + 6, moonY + 5, 14, 10);
-  ctx.fillRect(moonX - 8, moonY + 10, 8, 6);
-  // Moon shadow crescent
-  ctx.fillStyle = '#060001';
-  ctx.fillRect(moonX + moonS - 14, moonY - moonS - 2, 16, moonS * 2 + 4);
-
-  // === DISTANT CRIMSON FOREST (far layer) ===
-  ctx.fillStyle = '#1a0005';
-  for (let i = 0; i < W; i += 38) {
-    const tH = 45 + Math.sin(i * 0.07) * 25;
-    const tX = i + 12;
-    const tY = groundY - tH;
-    // Stem
-    ctx.fillRect(tX, tY, 8, tH);
-    // Crimson fungus cap layers (blocky mushroom steps)
-    ctx.fillStyle = '#2d0008';
-    ctx.fillRect(tX - 16, tY - 6, 40, 6);
-    ctx.fillRect(tX - 12, tY - 12, 32, 6);
-    ctx.fillRect(tX - 6, tY - 18, 20, 6);
-    ctx.fillStyle = '#1a0005';
-  }
-
-  // === CLOSER CRIMSON TREES (mid layer) ===
-  ctx.fillStyle = '#250007';
-  for (let i = 20; i < W; i += 95) {
-    const tH = 80 + Math.sin(i * 0.04 + 2) * 30;
-    const tX = i + 12;
-    const tY = groundY - tH;
-    // Thick nether stem
-    ctx.fillRect(tX, tY, 12, tH);
-    ctx.fillStyle = '#1c0005';
-    ctx.fillRect(tX + 2, tY + 10, 8, tH - 10);
-    // Huge fungus cap layers
-    ctx.fillStyle = '#3d000d';
-    ctx.fillRect(tX - 22, tY - 8, 56, 8);
-    ctx.fillRect(tX - 16, tY - 18, 44, 10);
-    ctx.fillRect(tX - 10, tY - 26, 32, 8);
-    ctx.fillRect(tX - 4, tY - 32, 20, 6);
-    // Shroomlights (glowing blocks in canopy)
-    const shGlow = (Math.sin(hardcoreTime * 3 + i) + 1) * 0.5;
-    ctx.save();
-    ctx.shadowColor = '#ffab00';
-    ctx.shadowBlur = 8;
-    ctx.fillStyle = `rgba(255, 171, 0, ${0.7 + shGlow * 0.3})`;
-    ctx.fillRect(tX - 8, tY - 14, 6, 6);
-    ctx.fillRect(tX + 14, tY - 22, 6, 6);
-    ctx.restore();
-    ctx.fillStyle = '#250007';
-  }
-
-  // === NETHER FORTRESS (centre-left) ===
-  const fX = W * 0.42;
-  const fY = groundY;
-  // Main tower
-  ctx.fillStyle = '#150003';
-  ctx.fillRect(fX, fY - 120, 60, 120);
-  // Nether brick texture lines
-  ctx.fillStyle = '#1f0005';
-  for (let row = 0; row < 10; row++) {
-    ctx.fillRect(fX, fY - 120 + row * 12, 60, 1);
-    ctx.fillRect(fX + (row % 2 === 0 ? 20 : 10), fY - 120 + row * 12, 1, 12);
-    ctx.fillRect(fX + (row % 2 === 0 ? 40 : 30), fY - 120 + row * 12, 1, 12);
-  }
-  // Top platform
-  ctx.fillStyle = '#120003';
-  ctx.fillRect(fX - 12, fY - 130, 84, 10);
-  // Battlement teeth
-  for (let i = 0; i < 5; i++) {
-    ctx.fillRect(fX - 12 + i * 17, fY - 142, 9, 12);
-  }
-  // Wither skull face on fortress wall
-  const skullGlow = (Math.sin(hardcoreTime * 2.5) + 1) * 0.5;
-  ctx.fillStyle = '#2a2a2a';
-  ctx.fillRect(fX + 18, fY - 95, 24, 24);
-  ctx.fillStyle = `rgba(255, 23, 68, ${0.6 + skullGlow * 0.4})`;
-  ctx.fillRect(fX + 22, fY - 90, 5, 5);
-  ctx.fillRect(fX + 33, fY - 90, 5, 5);
-  ctx.fillStyle = '#1a1a1a';
-  ctx.fillRect(fX + 26, fY - 82, 3, 4);
-  ctx.fillRect(fX + 31, fY - 82, 3, 4);
-  ctx.fillRect(fX + 22, fY - 76, 16, 3);
-  // Red wither eye glow lines
-  ctx.fillStyle = `rgba(255, 23, 68, ${0.15 + skullGlow * 0.12})`;
-  ctx.fillRect(fX + 20, fY - 93, 22, 1);
-  ctx.fillRect(fX + 20, fY - 87, 22, 1);
-
-  // Nether Portal on fortress
-  const pX = fX + 22;
-  const pY = fY - 55;
-  ctx.fillStyle = '#11001c';
-  ctx.fillRect(pX, pY, 18, 30);
-  ctx.fillStyle = '#08000a';
-  ctx.fillRect(pX + 3, pY + 3, 12, 24);
-  const pGlow = (Math.sin(hardcoreTime * 5) + 1) * 0.5;
-  ctx.save();
-  ctx.shadowColor = '#d500f9';
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = `rgba(156, 39, 176, ${0.7 + pGlow * 0.3})`;
-  ctx.fillRect(pX + 3, pY + 3, 12, 24);
-  ctx.restore();
-
-  // === SMALL RUINED PILLAR (right side) ===
-  const rX = W * 0.82;
-  ctx.fillStyle = '#120003';
-  ctx.fillRect(rX, groundY - 50, 20, 50);
-  ctx.fillRect(rX - 5, groundY - 56, 30, 6);
-  ctx.fillRect(rX - 5, groundY - 60, 10, 4);
-  ctx.fillRect(rX + 15, groundY - 60, 10, 4);
-
-  // === GROUND (NETHERRACK) ===
-  const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
-  groundGrad.addColorStop(0, '#2d0007');
-  groundGrad.addColorStop(0.15, '#220005');
-  groundGrad.addColorStop(1, '#0e0002');
-  ctx.fillStyle = groundGrad;
-  ctx.fillRect(0, groundY, W, H - groundY);
-
-  // Netherrack texture lines
-  ctx.fillStyle = '#350008';
-  for (let i = 0; i < W; i += 20) {
-    const lH = 2 + Math.abs(Math.sin(i * 0.3)) * 3;
-    ctx.fillRect(i, groundY + 1, 14, lH);
-  }
-
-  // === LAVA LAKE (animated with bubbles) ===
-  const lavaY = groundY + 2;
-  const lavaW = W * 0.25;
-  const lavaX = W * 0.55;
-  const lGrad = ctx.createLinearGradient(lavaX, lavaY, lavaX, H);
-  lGrad.addColorStop(0, '#ff5722');
-  lGrad.addColorStop(0.3, '#ff9100');
-  lGrad.addColorStop(0.7, '#e65100');
-  lGrad.addColorStop(1, '#bf360c');
-  ctx.fillStyle = lGrad;
-  ctx.fillRect(lavaX, lavaY, lavaW, H - lavaY);
-  // Lava surface shimmer
-  const shimmer = (Math.sin(hardcoreTime * 4) + 1) * 0.5;
-  ctx.fillStyle = `rgba(255, 213, 79, ${0.3 + shimmer * 0.25})`;
-  ctx.fillRect(lavaX + 5, lavaY, lavaW - 10, 3);
-  // Lava glow
-  ctx.save();
-  ctx.shadowColor = '#ff6d00';
-  ctx.shadowBlur = 25;
-  ctx.fillStyle = 'rgba(255, 109, 0, 0.01)';
-  ctx.fillRect(lavaX, lavaY, lavaW, 1);
-  ctx.restore();
-
-  // Lava Bubbles
-  if (hardcoreLavaBubbles.length < 5) {
-    hardcoreLavaBubbles.push({
-      x: lavaX + 10 + Math.random() * (lavaW - 20),
-      y: lavaY + 6 + Math.random() * 20,
-      size: Math.random() * 5 + 3,
-      life: 1.0,
-      speed: 0.01 + Math.random() * 0.01
-    });
-  }
-  for (let i = hardcoreLavaBubbles.length - 1; i >= 0; i--) {
-    const b = hardcoreLavaBubbles[i];
-    b.life -= b.speed;
-    const bSize = b.size * (0.5 + b.life * 0.5);
-    if (b.life <= 0) {
-      hardcoreLavaBubbles.splice(i, 1);
-      continue;
-    }
-    ctx.fillStyle = `rgba(255, 200, 50, ${b.life * 0.7})`;
-    ctx.fillRect(b.x, b.y - (1 - b.life) * 8, bSize, bSize);
-  }
-
-  // === SOUL SAND PATCHES WITH BLUE SOUL FIRE ===
-  ctx.fillStyle = '#3e2723';
-  ctx.fillRect(W * 0.15, groundY, 40, H - groundY);
-  ctx.fillStyle = '#4e342e';
-  ctx.fillRect(W * 0.15 + 4, groundY + 3, 12, 5);
-  ctx.fillRect(W * 0.15 + 22, groundY + 6, 10, 4);
-  const soulFire1 = (Math.sin(hardcoreTime * 6) + 1) * 0.5;
-  ctx.save();
-  ctx.shadowColor = '#00e5ff';
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = `rgba(0, 229, 255, ${0.7 + soulFire1 * 0.3})`;
-  ctx.fillRect(W * 0.15 + 14, groundY - 14 - soulFire1 * 4, 5, 14 + soulFire1 * 4);
-  ctx.fillStyle = `rgba(128, 255, 255, ${0.6 + soulFire1 * 0.3})`;
-  ctx.fillRect(W * 0.15 + 15, groundY - 8, 3, 7);
-  ctx.fillRect(W * 0.15 + 10, groundY - 8 - soulFire1 * 2, 4, 8);
-  ctx.fillRect(W * 0.15 + 20, groundY - 6 - soulFire1 * 3, 3, 6);
-  ctx.restore();
-
-  // Soul sand patch 2
-  ctx.fillStyle = '#3e2723';
-  ctx.fillRect(W * 0.88, groundY, 35, H - groundY);
-  const soulFire2 = (Math.sin(hardcoreTime * 5 + 2) + 1) * 0.5;
-  ctx.save();
-  ctx.shadowColor = '#00e5ff';
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = `rgba(0, 229, 255, ${0.65 + soulFire2 * 0.3})`;
-  ctx.fillRect(W * 0.88 + 12, groundY - 11 - soulFire2 * 3, 4, 11 + soulFire2 * 3);
-  ctx.fillStyle = `rgba(128, 255, 255, ${0.5 + soulFire2 * 0.3})`;
-  ctx.fillRect(W * 0.88 + 13, groundY - 6, 2, 5);
-  ctx.restore();
-
-  // === GLOWSTONE CLUSTERS (ceiling) ===
-  const glowPulse = (Math.sin(hardcoreTime * 2) + 1) * 0.5;
-  ctx.save();
-  ctx.shadowColor = '#ffab00';
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = `rgba(255, 171, 0, ${0.75 + glowPulse * 0.25})`;
-  ctx.fillRect(W * 0.35, 6, 14, 10);
-  ctx.fillRect(W * 0.35 + 4, 16, 8, 6);
-  ctx.fillRect(W * 0.75, 10, 10, 8);
-  ctx.fillRect(W * 0.75 - 4, 14, 6, 6);
-  ctx.restore();
-  ctx.fillStyle = '#ffd54f';
-  ctx.fillRect(W * 0.35 + 2, 8, 4, 4);
-  ctx.fillRect(W * 0.75 + 2, 12, 4, 4);
-
-  // === FLOATING GHAST MOB ===
-  if (hardcoreGhastX === 0) hardcoreGhastX = W * 0.55;
-  if (hardcoreGhastY === 0) hardcoreGhastY = H * 0.35;
-  hardcoreGhastX += hardcoreGhastDir * 0.3;
-  hardcoreGhastY += Math.sin(hardcoreTime * 2) * 0.3;
-  if (hardcoreGhastX > W * 0.85) hardcoreGhastDir = -1;
-  if (hardcoreGhastX < W * 0.45) hardcoreGhastDir = 1;
-
-  ctx.save();
-  const gX = hardcoreGhastX;
-  const gY = hardcoreGhastY;
-  ctx.fillStyle = '#e0e0e0';
-  ctx.fillRect(gX - 16, gY - 16, 32, 32);
-  ctx.fillStyle = '#bdbdbd';
-  ctx.fillRect(gX - 16, gY + 8, 32, 8);
-  ctx.fillStyle = '#212121';
-  ctx.fillRect(gX - 10, gY - 8, 5, 7);
-  ctx.fillRect(gX + 5, gY - 8, 5, 7);
-  ctx.fillRect(gX - 4, gY + 2, 8, 4);
-  ctx.fillStyle = '#ccc';
-  const tentWave = Math.sin(hardcoreTime * 4) * 3;
-  for (let t = -12; t <= 12; t += 8) {
-    const tLen = 14 + Math.sin(t + hardcoreTime * 3) * 6;
-    ctx.fillRect(gX + t, gY + 16, 3, tLen + tentWave);
-  }
-  ctx.restore();
-
-  // === PIGLIN BRUTE MOB (walking on ground) ===
-  if (hardcorePiglinX === 0) hardcorePiglinX = W * 0.65;
-  hardcorePiglinLeg += 0.06;
-  hardcorePiglinX += hardcorePiglinDir * 0.5;
-  if (hardcorePiglinX > W * 0.78) hardcorePiglinDir = -1;
-  if (hardcorePiglinX < W * 0.5) hardcorePiglinDir = 1;
-
-  ctx.save();
-  const ppX = hardcorePiglinX;
-  const ppY = groundY;
-  const s = 2.2;
-  const legOff1 = Math.sin(hardcorePiglinLeg) * 3;
-  const legOff2 = Math.sin(hardcorePiglinLeg + Math.PI) * 3;
-  ctx.translate(ppX, ppY);
-  if (hardcorePiglinDir < 0) ctx.scale(-1, 1);
-  // Head
-  ctx.fillStyle = '#e8a0a0';
-  ctx.fillRect(-4 * s, -26 * s, 8 * s, 8 * s);
-  ctx.fillStyle = '#d48888';
-  ctx.fillRect(-2 * s, -22 * s, 4 * s, 3 * s);
-  ctx.fillStyle = '#1a1a1a';
-  ctx.fillRect(-3 * s, -24 * s, 2 * s, 2 * s);
-  ctx.fillRect(1 * s, -24 * s, 2 * s, 2 * s);
-  ctx.fillStyle = '#cc8080';
-  ctx.fillRect(-5 * s, -27 * s, 2 * s, 4 * s);
-  ctx.fillRect(3 * s, -27 * s, 2 * s, 4 * s);
-  // Body
-  ctx.fillStyle = '#c8a000';
-  ctx.fillRect(-3 * s, -18 * s, 6 * s, 10 * s);
-  ctx.fillStyle = '#b08900';
-  ctx.fillRect(-3 * s, -18 * s, 6 * s, 2 * s);
-  // Arm + axe
-  ctx.fillStyle = '#e8a0a0';
-  ctx.fillRect(3 * s, -17 * s, 5 * s, 2 * s);
-  ctx.fillStyle = '#c8a000';
-  ctx.fillRect(7 * s, -20 * s, 2 * s, 8 * s);
-  ctx.fillStyle = '#ffd600';
-  ctx.fillRect(8 * s, -20 * s, 3 * s, 4 * s);
-  // Legs
-  ctx.fillStyle = '#8b6914';
-  ctx.fillRect(-2.5 * s + legOff1, -8 * s, 2.5 * s, 8 * s);
-  ctx.fillRect(0.2 * s + legOff2, -8 * s, 2.5 * s, 8 * s);
-  ctx.restore();
-
-  // === RISING ASH & EMBER PARTICLES ===
-  if (hardcoreEmbers.length < 60) {
-    hardcoreEmbers.push({
-      x: Math.random() * W,
-      y: H + Math.random() * 20,
-      size: Math.random() * 3 + 1.5,
-      speedY: Math.random() * 1.8 + 0.6,
-      speedX: (Math.random() - 0.5) * 0.8,
-      opacity: Math.random() * 0.6 + 0.2,
-      pulse: Math.random() * Math.PI,
-      color: Math.random() > 0.4 ? '#ff1744' : (Math.random() > 0.5 ? '#ff9100' : '#757575')
-    });
-  }
-
-  for (let i = hardcoreEmbers.length - 1; i >= 0; i--) {
-    const p = hardcoreEmbers[i];
-    p.y -= p.speedY;
-    p.x += p.speedX + Math.sin(p.pulse) * 0.4;
-    p.pulse += 0.05;
-    p.opacity -= 0.003;
-    if (p.opacity <= 0 || p.y < -10) {
-      hardcoreEmbers.splice(i, 1);
-      continue;
-    }
-    ctx.save();
-    ctx.globalAlpha = p.opacity;
-    ctx.fillStyle = p.color;
-    ctx.fillRect(Math.floor(p.x), Math.floor(p.y), Math.floor(p.size), Math.floor(p.size));
-    ctx.restore();
-  }
-
-  // === CRIMSON SPORE PARTICLES (drifting sideways) ===
-  if (hardcoreAshParticles.length < 25) {
-    hardcoreAshParticles.push({
-      x: Math.random() * W,
-      y: Math.random() * groundY,
-      speedX: (Math.random() - 0.5) * 0.6,
-      speedY: Math.random() * 0.3 - 0.1,
-      opacity: Math.random() * 0.5 + 0.15,
-      size: Math.random() * 2.5 + 1,
-      isWarped: Math.random() > 0.7
-    });
-  }
-
-  for (let i = hardcoreAshParticles.length - 1; i >= 0; i--) {
-    const sp = hardcoreAshParticles[i];
-    sp.x += sp.speedX;
-    sp.y += sp.speedY;
-    sp.opacity -= 0.001;
-    if (sp.opacity <= 0 || sp.x < -10 || sp.x > W + 10 || sp.y < -10 || sp.y > groundY) {
-      hardcoreAshParticles.splice(i, 1);
-      continue;
-    }
-    ctx.save();
-    ctx.globalAlpha = sp.opacity;
-    ctx.fillStyle = sp.isWarped ? '#26c6da' : '#ef5350';
-    ctx.fillRect(Math.floor(sp.x), Math.floor(sp.y), Math.ceil(sp.size), Math.ceil(sp.size));
-    ctx.restore();
-  }
-}
-
 // Change Modpack Theme & View
 function switchModpack(packKey) {
   if (launcherState !== 'ready') return; // block switching while installing/running
+  if (!packDetails[packKey]) packKey = 'stranded_at_sea';
   if (activePack === packKey && document.body.classList.contains(activeTheme)) return; // Already active
   
   activePack = packKey;
@@ -2345,7 +2252,7 @@ function switchModpack(packKey) {
   else if (packKey === 'democky_edition') activeTheme = 'theme-democky';
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
   else if (packKey === 'vanilla_plus') activeTheme = 'theme-vanilla';
-  else if (packKey === 'hardcore_1_9') activeTheme = 'theme-hardcore';
+  else if (packKey === 'fabric_26_2') activeTheme = 'theme-fabric26';
   
   // Re-initialize particles on theme change (clears old ones and respawns them)
   initParticles();
@@ -2366,16 +2273,10 @@ function switchModpack(packKey) {
     item.classList.toggle('active', item.dataset.pack === packKey);
   });
 
-  // Hide Installed Version and Server pills for Hardcore 1.9.4
   const installedVerPill = document.getElementById('stat-pill-installed-version');
   const serverPill = document.getElementById('stat-pill-server');
-  if (packKey === 'hardcore_1_9') {
-    if (installedVerPill) installedVerPill.style.display = 'none';
-    if (serverPill) serverPill.style.display = 'none';
-  } else {
-    if (installedVerPill) installedVerPill.style.display = '';
-    if (serverPill) serverPill.style.display = '';
-  }
+  if (installedVerPill) installedVerPill.style.display = '';
+  if (serverPill) serverPill.style.display = '';
 
   // Save selected modpack preference automatically
   if (configSettings) {
@@ -2417,6 +2318,7 @@ async function checkServerStatus(packKey) {
         const motd = data.motd?.clean?.trim() || "";
         const motdPackMapping = {
           '0': 'vanilla_plus',
+          'v': 'fabric_26_2',
           '1': 'stranded_at_sea',
           '2': 'democky_edition',
           '3': 'cobblemon'
@@ -2743,7 +2645,7 @@ async function openPackSettings(packKey) {
 
   const shadersTitleEl = document.getElementById('pack-shaders-title');
   const shadersSubEl = document.getElementById('pack-shaders-subtitle');
-  const isOptiFine = packKey === 'hardcore_1_9' || (details && (details.loader || '').toLowerCase().includes('optifine'));
+  const isOptiFine = details && (details.loader || '').toLowerCase().includes('optifine');
 
   if (shadersTitleEl) {
     shadersTitleEl.textContent = isOptiFine ? 'OptiFine Shaders Support' : 'Shader Support (Iris / Oculus)';
@@ -2755,7 +2657,7 @@ async function openPackSettings(packKey) {
   }
 
   if (!configSettings.addons) configSettings.addons = {};
-  if (!configSettings.addons[packKey]) configSettings.addons[packKey] = { shaders: isOptiFine ? true : false };
+  if (!configSettings.addons[packKey]) configSettings.addons[packKey] = { shaders: true };
   
   const packAddons = configSettings.addons[packKey];
   if (packSettingsShaders) {
@@ -3761,10 +3663,23 @@ async function initApp() {
   // Sort modpacks based on last played initially
   sortModpacks();
 
-  // Switch to last selected modpack from saved settings (fallback to stranded_at_sea)
-  const initialPack = (configSettings && configSettings.selectedPack && packDetails[configSettings.selectedPack])
-    ? configSettings.selectedPack
-    : 'stranded_at_sea';
+  // Switch to last selected modpack from saved settings (fallback to last played or cobblemon)
+  let initialPack = (configSettings && configSettings.selectedPack && packDetails[configSettings.selectedPack]) 
+    ? configSettings.selectedPack 
+    : null;
+    
+  if (!initialPack) {
+    let latestPack = 'cobblemon';
+    let maxTime = -1;
+    for (const key in packDetails) {
+      const time = parseInt(localStorage.getItem('lastPlayed_' + key) || '0', 10);
+      if (time > maxTime) {
+        maxTime = time;
+        latestPack = key;
+      }
+    }
+    initialPack = latestPack;
+  }
   switchModpack(initialPack);
 }
 

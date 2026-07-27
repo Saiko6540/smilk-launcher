@@ -118,7 +118,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   console.log(`Checking updates for ${packKey} from ${configUrl}`);
   sendProgress({ status: 'checking', message: 'Checking for updates...' });
 
-  const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders) || false;
+  const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders !== undefined) ? settings.addons[packKey].shaders : true;
 
   // --- VANILLA / NO-MRPACK MODE ---
   if (configUrl === 'vanilla') {
@@ -132,6 +132,26 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
     };
     
     fs.mkdirSync(instanceDir, { recursive: true });
+    
+    if (settings.extraMods && Array.isArray(settings.extraMods)) {
+      sendProgress({ status: 'downloading_mods', message: 'Downloading extra mods...', progress: 0 });
+      const modsDir = path.join(instanceDir, 'mods');
+      fs.mkdirSync(modsDir, { recursive: true });
+      for (let i = 0; i < settings.extraMods.length; i++) {
+        const modUrl = settings.extraMods[i];
+        const fileName = modUrl.substring(modUrl.lastIndexOf('/') + 1) || `mod_${i}.jar`;
+        const destPath = path.join(modsDir, decodeURIComponent(fileName));
+        try {
+          if (!fs.existsSync(destPath)) {
+            await downloadFile(modUrl, destPath);
+          }
+        } catch (e) {
+          console.warn('Failed to download extra mod:', modUrl, e);
+        }
+        sendProgress({ status: 'downloading_mods', message: `Downloading extra mods (${i+1}/${settings.extraMods.length})`, progress: Math.round(((i+1)/settings.extraMods.length)*100) });
+      }
+    }
+
     const localVersionFile = path.join(instanceDir, 'local_version.json');
     fs.writeFileSync(localVersionFile, JSON.stringify(finalConfig, null, 2), 'utf8');
     
