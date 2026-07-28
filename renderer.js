@@ -903,7 +903,7 @@ function initParticles() {
   }
   rafts.push(new Raft());
 
-  // Steam, Gears, Airships, Clouds, Airplanes, Trains & Ships (Democky edition)
+  // Steam, Gears, Airships, Clouds, Airplanes, Trains & Ships (Create+ edition)
   for (let i = 0; i < 15; i++) {
     steam.push(new Steam());
   }
@@ -953,8 +953,8 @@ function animate() {
   if (!hasCustomBg) {
     if (activeTheme === 'theme-stranded') {
       drawOceanScene();
-    } else if (activeTheme === 'theme-democky') {
-      drawDemockyScene();
+    } else if (activeTheme === 'theme-createplus') {
+      drawCreatePlusScene();
     } else if (activeTheme === 'theme-cobblemon') {
       drawPokemonScene();
     } else if (activeTheme === 'theme-vanilla') {
@@ -1083,10 +1083,10 @@ function drawOceanScene() {
   bubbles.forEach(b => { b.update(); b.draw(); });
 }
 
-// ============ DEMOCKY EDITION — FULL STEAMPUNK SCENE ============
-let demockyTime = 0;
-function drawDemockyScene() {
-  demockyTime += 0.005;
+// ============ CREATE+ EDITION — FULL STEAMPUNK SCENE ============
+let createplusTime = 0;
+function drawCreatePlusScene() {
+  createplusTime += 0.005;
   const W = canvas.width;
   const H = canvas.height;
   const groundY = H * 0.72;
@@ -1220,7 +1220,7 @@ function drawDemockyScene() {
   // Grass blades on top
   ctx.fillStyle = '#43a047';
   for (let i = 0; i < W; i += 25) {
-    const bladeH = 4 + Math.sin(i * 0.8 + demockyTime * 2) * 3;
+    const bladeH = 4 + Math.sin(i * 0.8 + createplusTime * 2) * 3;
     ctx.fillRect(i, groundY - bladeH, 3, bladeH);
     ctx.fillRect(i + 10, groundY - bladeH + 1, 3, bladeH - 1);
   }
@@ -1254,7 +1254,7 @@ function drawDemockyScene() {
   // Water wheel
   ctx.save();
   ctx.translate(75, groundY - 20);
-  ctx.rotate(demockyTime * 3);
+  ctx.rotate(createplusTime * 3);
   ctx.fillStyle = '#795548';
   ctx.fillRect(-15, -15, 30, 30);
   ctx.fillStyle = '#5d4037';
@@ -1656,7 +1656,7 @@ async function checkServerStatus(instanceId) {
         const motdMap = {
           '0': ['vanilla', 'adventure'],
           '1': ['sea', 'stranded'],
-          '2': ['create', 'plus', 'democky'],
+          '2': ['create', 'plus', 'createplus'],
           '3': ['cobblemon', 'pokemon']
         };
         
@@ -2301,6 +2301,7 @@ function renderInstancesList() {
     activeInstanceId = null;
     document.body.style.backgroundImage = '';
     document.body.className = 'theme-vanilla';
+    startBackgroundCycle();
     return;
   }
 
@@ -2371,6 +2372,7 @@ function renderInstancesList() {
 
 // Switch the active instance in the dashboard
 function switchInstance(instanceId) {
+  stopBackgroundCycle();
   activeInstanceId = instanceId;
   activePack = instanceId; // keep old variable for compat
   
@@ -2400,8 +2402,8 @@ function switchInstance(instanceId) {
   if (!targetTheme) {
     if (textToMatch.includes('sea') || textToMatch.includes('stranded')) {
       targetTheme = 'theme-stranded';
-    } else if (textToMatch.includes('democky') || textToMatch.includes('create') || textToMatch.includes('plus')) {
-      targetTheme = 'theme-democky';
+    } else if (textToMatch.includes('createplus') || textToMatch.includes('create') || textToMatch.includes('plus')) {
+      targetTheme = 'theme-createplus';
     } else if (textToMatch.includes('cobble') || textToMatch.includes('pokemon')) {
       targetTheme = 'theme-cobblemon';
     } else if (textToMatch.includes('vanilla')) {
@@ -2418,8 +2420,8 @@ function switchInstance(instanceId) {
   // Sync progress bar visibility for this specific instance if downloading
   updateInstanceProgressBar(instanceId);
 
-  // Official theme packs have built-in animated canvas scenes (sea, democky, cobblemon, vanilla)
-  const isOfficialAnimatedPack = ['theme-stranded', 'theme-democky', 'theme-cobblemon', 'theme-vanilla'].includes(targetTheme);
+  // Official theme packs have built-in animated canvas scenes (sea, createplus, cobblemon, vanilla)
+  const isOfficialAnimatedPack = ['theme-stranded', 'theme-createplus', 'theme-cobblemon', 'theme-vanilla'].includes(targetTheme);
 
   if (isOfficialAnimatedPack) {
     // Clear static background so full-screen animated canvas scene shows cleanly
@@ -2771,7 +2773,7 @@ async function installNewInstance(packData, mrpackPath, versionType) {
 }
 
 let backgroundCycleInterval = null;
-const fallbackThemes = ['theme-stranded', 'theme-democky', 'theme-cobblemon', 'theme-vanilla'];
+const fallbackThemes = ['theme-stranded', 'theme-createplus', 'theme-cobblemon', 'theme-vanilla'];
 
 function startBackgroundCycle() {
   if (backgroundCycleInterval) return;
@@ -2833,6 +2835,7 @@ async function initApp() {
       activePack = null;
       activeInstanceId = null;
       document.body.style.backgroundImage = '';
+      startBackgroundCycle();
     }
   } catch (err) {
     console.error("Critical error during initApp:", err);
