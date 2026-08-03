@@ -112,8 +112,15 @@ const modpacks = {
     loader: 'fabric-0.19.3',
     configUrl: 'vanilla',
     extraMods: [
+      'https://cdn.modrinth.com/data/P7dR8mSH/versions/3gT0I5vt/fabric-api-0.156.0%2B26.2.jar',
       'https://cdn.modrinth.com/data/AANobbMI/versions/2Yom1N68/sodium-fabric-0.9.1%2Bmc26.2.jar',
-      'https://cdn.modrinth.com/data/YL57xq9U/versions/oaD6KQls/iris-fabric-1.11.2%2Bmc26.2.jar'
+      'https://cdn.modrinth.com/data/YL57xq9U/versions/oaD6KQls/iris-fabric-1.11.2%2Bmc26.2.jar',
+      'https://cdn.modrinth.com/data/9eGKb6K1/versions/3SOh5iiX/voicechat-fabric-2.6.21%2B26.2.jar',
+      'https://cdn.modrinth.com/data/uCdwusMi/versions/gBf0SaV1/DistantHorizons-3.2.0-b-26.2-fabric-neoforge.jar',
+      'https://cdn.modrinth.com/data/yBW8D80W/versions/jBLH7Qy8/lambdynamiclights-4.12.2%2B26.2.jar',
+      'https://cdn.modrinth.com/data/w7ThoJFB/versions/QWTzJNJY/zoomify-2.16.1%2B26.2.jar',
+      'https://cdn.modrinth.com/data/Ha28R6CL/versions/bdhiINYC/fabric-language-kotlin-1.13.13%2Bkotlin.2.4.10.jar',
+      'https://cdn.modrinth.com/data/1eAoo2KR/versions/cnfPzuFU/yet_another_config_lib_v3-3.9.6%2B26.2-fabric.jar'
     ],
     mockConfig: {
       version: '1.0.0',
