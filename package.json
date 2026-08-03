@@ -1,6 +1,6 @@
 {
   "name": "smilk-launcher",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Custom Minecraft Launcher with dynamic animated themes",
   "main": "main.js",
   "scripts": {
