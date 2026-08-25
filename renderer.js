@@ -2325,10 +2325,10 @@ playBtn.addEventListener('click', async () => {
       usernameInput.select();
     }
     const proceed = await showCustomConfirm(
-      'Ви використовуєте стандартний нікнейм "Player". Бажаєте змінити його на власний перед грою, щоб зберегти свій інвентар та ігровий прогрес?',
-      'Перевірка нікнейму',
+      'You are currently using the default nickname "Player". Would you like to change it to your own custom nickname to keep your server progress and inventory?',
+      'Nickname Verification',
       'warning',
-      'Грати як Player'
+      'Play as Player'
     );
     if (!proceed) {
       if (usernameInput) {
