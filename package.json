@@ -1,6 +1,6 @@
 {
   "name": "smilk-launcher",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "Custom Minecraft Launcher with dynamic animated themes",
   "main": "main.js",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "electron-builder --win --x64"
   },
   "build": {
+    "npmRebuild": false,
     "appId": "com.smilk.launcher",
     "productName": "smilk",
     "directories": {

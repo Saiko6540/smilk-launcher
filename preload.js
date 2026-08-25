@@ -10,7 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   selectJavaPath: () => ipcRenderer.invoke('select-java-path'),
   checkUpdates: (packKey) => ipcRenderer.invoke('check-updates', packKey),
   startUpdate: (packKey) => ipcRenderer.invoke('start-update', packKey),
-  startLaunch: (packKey) => ipcRenderer.invoke('start-launch', packKey),
+  startLaunch: (packKey, nickname) => ipcRenderer.invoke('start-launch', packKey, nickname),
   installJava: (version) => ipcRenderer.invoke('install-java', version),
   uploadLog: (instanceDir) => ipcRenderer.invoke('upload-log', instanceDir),
   openWebsite: () => ipcRenderer.send('open-website'),

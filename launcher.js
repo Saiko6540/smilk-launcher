@@ -7,47 +7,92 @@ const { Client, Authenticator } = require('minecraft-launcher-core');
 /**
  * Helper to download a file (used for loader downloading)
  */
+const http = require('http');
+
 /**
- * Helper to download a file (used for loader downloading)
+ * Helper to download a file (used for loader and java downloading)
  */
 function downloadFile(url, destPath, options = {}) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    const file = fs.createWriteStream(destPath);
-    
-    const requestOptions = {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      ...options
-    };
 
-    const doReq = (curUrl) => {
-      https.get(curUrl, requestOptions, (response) => {
+    let file = null;
+    let isFinished = false;
+
+    const doReq = (curUrl, redirectCount = 0) => {
+      if (redirectCount > 15) {
+        if (file) file.close();
+        fs.unlink(destPath, () => {});
+        return reject(new Error(`Too many redirects downloading ${url}`));
+      }
+
+      let parsed;
+      try {
+        parsed = new URL(curUrl);
+      } catch (err) {
+        if (file) file.close();
+        fs.unlink(destPath, () => {});
+        return reject(err);
+      }
+
+      const client = parsed.protocol === 'http:' ? http : https;
+      const requestOptions = {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 smilk-launcher',
+          'Accept': '*/*'
+        },
+        ...options
+      };
+
+      const request = client.request(requestOptions, (response) => {
         if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
           let loc = response.headers.location;
-          if (loc.startsWith('/')) {
-            const u = new URL(curUrl);
-            loc = `${u.protocol}//${u.host}${loc}`;
+          if (!loc.startsWith('http://') && !loc.startsWith('https://')) {
+            loc = new URL(loc, curUrl).href;
           }
-          doReq(loc);
-          return;
+          response.resume();
+          return doReq(loc, redirectCount + 1);
         }
 
         if (response.statusCode !== 200) {
-          file.close();
+          response.resume();
+          if (file) file.close();
           fs.unlink(destPath, () => {});
-          reject(new Error(`Failed to download: Status Code ${response.statusCode}`));
-          return;
+          return reject(new Error(`Failed to download ${curUrl}: Status Code ${response.statusCode}`));
         }
+
+        file = fs.createWriteStream(destPath);
         response.pipe(file);
+
         file.on('finish', () => {
-          file.close();
-          resolve();
+          file.close(() => {
+            isFinished = true;
+            resolve();
+          });
         });
-      }).on('error', (err) => {
-        file.close();
-        fs.unlink(destPath, () => {});
-        reject(err);
+
+        file.on('error', (err) => {
+          if (!isFinished) {
+            file.close();
+            fs.unlink(destPath, () => {});
+            reject(err);
+          }
+        });
       });
+
+      request.on('error', (err) => {
+        if (!isFinished) {
+          if (file) file.close();
+          fs.unlink(destPath, () => {});
+          reject(err);
+        }
+      });
+
+      request.end();
     };
 
     doReq(url);
@@ -199,6 +244,59 @@ async function installFabric(mcVersion, loaderVersion, instanceDir) {
 }
 
 /**
+ * Installs NeoForge by running the official installer JAR headlessly
+ */
+async function installNeoForge(mcVersion, neoforgeVersion, instanceDir, javaPath, sendProgress) {
+  const customVersionId = `neoforge-${neoforgeVersion}`;
+  const versionDir = path.join(instanceDir, 'versions', customVersionId);
+  const jsonPath = path.join(versionDir, `${customVersionId}.json`);
+
+  if (fs.existsSync(jsonPath)) {
+    return customVersionId;
+  }
+
+  // Ensure launcher_profiles.json exists
+  const profilesFile = path.join(instanceDir, 'launcher_profiles.json');
+  if (!fs.existsSync(profilesFile)) {
+    fs.writeFileSync(profilesFile, JSON.stringify({ profiles: {} }, null, 2), 'utf8');
+  }
+
+  // Download neoforge installer
+  const installerPath = path.join(instanceDir, 'neoforge-installer.jar');
+  const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${neoforgeVersion}/neoforge-${neoforgeVersion}-installer.jar`;
+  
+  console.log(`Downloading NeoForge installer from ${installerUrl}`);
+  sendProgress({ status: 'installing_loader', message: 'Downloading NeoForge installer...' });
+  await downloadFile(installerUrl, installerPath);
+
+  // Run installer command
+  sendProgress({ status: 'installing_loader', message: 'Installing NeoForge (this may take a minute)...' });
+  const javaExec = javaPath || 'java';
+
+  try {
+    await runCommand(javaExec, ['-jar', installerPath, '--installClient', instanceDir], { cwd: instanceDir });
+  } catch (err) {
+    console.error('NeoForge installer execution failed:', err);
+    throw new Error(`NeoForge installation failed: Ensure Java is installed and compatible. (${err.message})`);
+  } finally {
+    // Cleanup installer files
+    try {
+      if (fs.existsSync(installerPath)) fs.unlinkSync(installerPath);
+      const installerLog = path.join(instanceDir, 'neoforge-installer.jar.log');
+      if (fs.existsSync(installerLog)) fs.unlinkSync(installerLog);
+    } catch (e) {
+      console.warn('Failed to clean up installer files:', e);
+    }
+  }
+
+  if (!fs.existsSync(jsonPath)) {
+    throw new Error('NeoForge installer ran but did not generate the version JSON.');
+  }
+
+  return customVersionId;
+}
+
+/**
  * Installs Forge by running the official installer JAR headlessly
  */
 async function installForge(mcVersion, forgeVersion, instanceDir, javaPath, sendProgress) {
@@ -209,6 +307,12 @@ async function installForge(mcVersion, forgeVersion, instanceDir, javaPath, send
 
   if (fs.existsSync(jsonPath)) {
     return customVersionId;
+  }
+
+  // Ensure launcher_profiles.json exists
+  const profilesFile = path.join(instanceDir, 'launcher_profiles.json');
+  if (!fs.existsSync(profilesFile)) {
+    fs.writeFileSync(profilesFile, JSON.stringify({ profiles: {} }, null, 2), 'utf8');
   }
 
   // Download forge installer
@@ -249,20 +353,31 @@ async function installForge(mcVersion, forgeVersion, instanceDir, javaPath, send
 
 function checkJavaVersion(javaPath, mcVersion) {
   return new Promise((resolve, reject) => {
+    let targetJavaVersion = 21;
     let minJavaVersion = 8;
+    let maxJavaVersion = 21;
     try {
       const parts = mcVersion.split('.');
+      const mcMajor = parseInt(parts[0], 10);
       const mcMinor = parseInt(parts[1], 10);
       const mcPatch = parseInt(parts[2] || '0', 10);
       
-      if (parts[0] === '26') {
-        minJavaVersion = 25; // 26.2 requires Java 25
-      } else if (mcMinor >= 21) {
-        minJavaVersion = 22; // c2me mod in 1.21.1 requires Java 22 Vector API
-      } else if (mcMinor === 20 && mcPatch >= 5) {
+      if (mcMajor === 26) {
+        minJavaVersion = 25;
+        maxJavaVersion = 25;
+        targetJavaVersion = 25;
+      } else if (mcMinor >= 21 || (mcMinor === 20 && mcPatch >= 5)) {
         minJavaVersion = 21;
+        maxJavaVersion = 21;
+        targetJavaVersion = 21;
       } else if (mcMinor >= 17) {
         minJavaVersion = 17;
+        maxJavaVersion = 17;
+        targetJavaVersion = 17;
+      } else {
+        minJavaVersion = 8;
+        maxJavaVersion = 8;
+        targetJavaVersion = 8;
       }
     } catch(e) {}
     
@@ -274,7 +389,7 @@ function checkJavaVersion(javaPath, mcVersion) {
       if (error) {
          const err = new Error(`Java was not found on your system.`);
          err.javaError = true;
-         err.requiredVersion = minJavaVersion;
+         err.requiredVersion = targetJavaVersion;
          return reject(err);
       }
       const output = stderr || stdout;
@@ -289,15 +404,15 @@ function checkJavaVersion(javaPath, mcVersion) {
         }
         
         if (major > 0 && major < minJavaVersion) {
-          const err = new Error(`Minecraft ${mcVersion} requires Java ${minJavaVersion} or later, but you are using Java ${major}.`);
+          const err = new Error(`Minecraft ${mcVersion} requires Java ${minJavaVersion}, but you are using Java ${major}.`);
           err.javaError = true;
-          err.requiredVersion = minJavaVersion;
+          err.requiredVersion = targetJavaVersion;
           return reject(err);
         }
-        if (major > 22 && parts[0] !== '26') {
-          const err = new Error(`Java ${major} is too new for older Fabric Loaders. Please use Java 21 or Java 22.`);
+        if (major > 0 && major > maxJavaVersion) {
+          const err = new Error(`Minecraft ${mcVersion} requires Java ${targetJavaVersion} (mods like Cobblemon require Java ${targetJavaVersion}), but you are using Java ${major}.`);
           err.javaError = true;
-          err.requiredVersion = 22;
+          err.requiredVersion = targetJavaVersion;
           return reject(err);
         }
         
@@ -313,15 +428,25 @@ function checkJavaVersion(javaPath, mcVersion) {
 async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
   const javaDir = path.join(userDataPath, 'game_data', 'java', `jre-${targetVersion}`);
   
-  // Check if we already have it
-  if (fs.existsSync(javaDir)) {
-    const files = fs.readdirSync(javaDir);
-    for (const file of files) {
-      const javaExe = path.join(javaDir, file, 'bin', 'java.exe');
-      if (fs.existsSync(javaExe)) {
-        return javaExe;
+  function findJava(dir) {
+    if (!fs.existsSync(dir)) return null;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const found = findJava(fullPath);
+        if (found) return found;
+      } else if (entry.name.toLowerCase() === 'javaw.exe' || entry.name.toLowerCase() === 'java.exe') {
+        return fullPath;
       }
     }
+    return null;
+  }
+
+  // Check if we already have it
+  const existingJava = findJava(javaDir);
+  if (existingJava) {
+    return existingJava;
   }
 
   sendProgress({ status: 'installing_java', message: `Downloading compatible Java ${targetVersion}... (this may take a minute)` });
@@ -340,15 +465,13 @@ async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
   const zip = new AdmZip(zipPath);
   zip.extractAllTo(javaDir, true);
   
-  fs.unlinkSync(zipPath);
+  try {
+    fs.unlinkSync(zipPath);
+  } catch (e) {}
 
-  // Find the exact java.exe path
-  const files = fs.readdirSync(javaDir);
-  for (const file of files) {
-    const javaExe = path.join(javaDir, file, 'bin', 'java.exe');
-    if (fs.existsSync(javaExe)) {
-      return javaExe;
-    }
+  const javaExe = findJava(javaDir);
+  if (javaExe) {
+    return javaExe;
   }
   
   throw new Error(`Failed to locate java.exe after extracting Java ${targetVersion}.`);
@@ -394,10 +517,14 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     const loaderVersion = loaderString.substring('fabric-'.length);
     sendProgress({ status: 'installing_loader', message: 'Preparing Fabric Loader...' });
     customVersionId = await installFabric(mcVersion, loaderVersion, instanceDir);
+  } else if (loaderString && loaderString.startsWith('neoforge-')) {
+    const neoforgeVersion = loaderString.substring('neoforge-'.length);
+    sendProgress({ status: 'installing_loader', message: 'Preparing NeoForge Loader...' });
+    customVersionId = await installNeoForge(mcVersion, neoforgeVersion, instanceDir, finalJavaPath, sendProgress);
   } else if (loaderString && loaderString.startsWith('forge-')) {
     const forgeVersion = loaderString.substring('forge-'.length);
     sendProgress({ status: 'installing_loader', message: 'Preparing Forge Loader...' });
-    customVersionId = await installForge(mcVersion, forgeVersion, instanceDir, javaPath, sendProgress);
+    customVersionId = await installForge(mcVersion, forgeVersion, instanceDir, finalJavaPath, sendProgress);
   } else if (loaderString && loaderString.startsWith('optifine')) {
     sendProgress({ status: 'installing_loader', message: 'Preparing OptiFine Loader...' });
     customVersionId = await installOptiFine(mcVersion, instanceDir, sendProgress);
@@ -414,6 +541,34 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     customArgs = jvmArgs.trim().split(/\s+/);
   }
 
+  // If a custom loader JSON exists (e.g. NeoForge / Forge), extract arguments.jvm that MCLC ignores
+  if (customVersionId) {
+    const customJsonPath = path.join(instanceDir, 'versions', customVersionId, `${customVersionId}.json`);
+    if (fs.existsSync(customJsonPath)) {
+      try {
+        const customJson = JSON.parse(fs.readFileSync(customJsonPath, 'utf8'));
+        if (customJson.arguments && Array.isArray(customJson.arguments.jvm)) {
+          const libDir = path.join(instanceDir, 'libraries');
+          const sep = process.platform === 'win32' ? ';' : ':';
+          const versionDir = path.join(instanceDir, 'versions', customVersionId);
+          
+          for (const arg of customJson.arguments.jvm) {
+            if (typeof arg === 'string') {
+              const expanded = arg
+                .replace(/\$\{library_directory\}/g, libDir)
+                .replace(/\$\{classpath_separator\}/g, sep)
+                .replace(/\$\{version_name\}/g, customVersionId)
+                .replace(/\$\{natives_directory\}/g, path.join(versionDir, 'natives'));
+              customArgs.push(expanded);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse custom version JSON jvm arguments:', e);
+      }
+    }
+  }
+
     const opts = {
       authorization: Authenticator.getAuth(nickname || 'Player'),
       root: instanceDir,
@@ -427,7 +582,10 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
         min: '1G'
       },
       javaPath: finalJavaPath,
-      ...(customArgs.length ? { customArgs: customArgs } : {})
+      ...(customArgs.length ? { customArgs: customArgs } : {}),
+      overrides: {
+        assetIndex: mcVersion
+      }
     };
 
   console.log('Launching MCLC with options:', JSON.stringify({

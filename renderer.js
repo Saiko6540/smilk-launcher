@@ -7,11 +7,11 @@ const packDetails = {
     loader: 'Fabric-0.15.11',
     serverIp: '185.206.149.27:25601'
   },
-  democky_edition: {
-    title: 'Create +',
-    description: 'Steampunk machinery combined with extreme survival on land. Build complex clockwork railways, steam factories, and automate everything.',
-    mcVersion: '1.20.1',
-    loader: 'Forge-47.2.0',
+  create_new_world: {
+    title: 'Create: New World',
+    description: 'Explore a boundless new world of engineering and automation powered by the Create mod. Construct massive automated factories, ingenious contraptions, and conquer new horizons.',
+    mcVersion: '1.21.1',
+    loader: 'NeoForge-21.1.248',
     serverIp: '185.206.149.27:25601'
   },
   cobblemon: {
@@ -19,20 +19,6 @@ const packDetails = {
     description: 'Catch them all in Minecraft! A fully integrated Pokemon experience, with high quality animations, custom battles, and modern style.',
     mcVersion: '1.20.1',
     loader: 'Fabric-0.15.11',
-    serverIp: '185.206.149.27:25601'
-  },
-  vanilla_plus: {
-    title: 'Vanilla+',
-    description: 'A true adventure awaits. Explore dangerous new dungeons, battle fearsome mobs, and discover ancient loot — all in the classic Minecraft spirit.',
-    mcVersion: '1.21.1',
-    loader: 'Fabric-0.16.5',
-    serverIp: '185.206.149.27:25601'
-  },
-  fabric_26_2: {
-    title: 'Vanilla 26.2',
-    description: 'A custom Fabric modpack containing Sodium, Iris, and Sodium Extra for ultimate performance and shaders support.',
-    mcVersion: '26.2',
-    loader: 'Fabric-0.16.5',
     serverIp: '185.206.149.27:25601'
   }
 };
@@ -205,8 +191,8 @@ window.showCustomConfirm = function(message, title = 'Confirmation', type = 'war
   return showCustomDialog({ message, type, title, showCancel: true, confirmText });
 };
 // Active Launcher State
-let activePack = 'fabric_26_2';
-let activeTheme = 'theme-fabric26';
+let activePack = null;
+let activeTheme = null;
 let launcherState = 'ready'; // ready, updating, launching, playing, error
 let configSettings = {};
 let hideTimeout = null;
@@ -215,18 +201,14 @@ let hideTimeout = null;
 const canvas = document.getElementById('animation-canvas');
 const ctx = canvas.getContext('2d');
 let bubbles = [];
-let gears = [];
 let sparks = [];
-let steam = [];
-let airships = [];
-let clouds = [];
-let airplanes = [];
-let trains = [];
-let ships = [];
 let rafts = [];
 let pokemons = [];
 let pokeballs = [];
-let vanillaMobs = [];
+let seagulls = [];
+let nwGears = [];
+let nwAirships = [];
+let nwEmbers = [];
 
 // Canvas Resize Handler
 function resizeCanvas() {
@@ -235,6 +217,155 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+
+// Animation classes
+class NWGear {
+  constructor(x, y, radius, teeth, speed, isLarge = false) {
+    this.x = x;
+    this.y = y;
+    this.radius = radius;
+    this.teeth = teeth;
+    this.speed = speed;
+    this.angle = Math.random() * Math.PI * 2;
+    this.isLarge = isLarge;
+  }
+  update() {
+    this.angle += this.speed;
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.angle);
+
+    const brassColor = '#d97706';
+    const highlightBrass = '#f59e0b';
+    const andesiteColor = '#64748b';
+
+    // Teeth
+    ctx.fillStyle = brassColor;
+    ctx.beginPath();
+    for (let i = 0; i < this.teeth; i++) {
+      ctx.rotate((Math.PI * 2) / this.teeth);
+      ctx.fillRect(-this.radius * 0.12, -this.radius - (this.isLarge ? 8 : 6), this.radius * 0.24, 15);
+    }
+
+    // Outer Rim
+    ctx.fillStyle = highlightBrass;
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner cutout
+    ctx.fillStyle = '#78350f';
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Andesite alloy core (octagonal)
+    ctx.fillStyle = andesiteColor;
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      ctx.lineTo(Math.cos(i * Math.PI / 4) * (this.radius * 0.38), Math.sin(i * Math.PI / 4) * (this.radius * 0.38));
+    }
+    ctx.fill();
+
+    // Shaft hole
+    ctx.fillStyle = '#1c1917';
+    ctx.beginPath();
+    ctx.arc(0, 0, this.radius * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+class NWAirship {
+  constructor() {
+    this.x = canvas.width + Math.random() * 300 + 100;
+    this.y = Math.random() * (canvas.height * 0.35) + 60;
+    this.speed = Math.random() * 0.4 + 0.3;
+    this.scale = Math.random() * 0.25 + 0.65;
+    this.bob = Math.random() * Math.PI * 2;
+  }
+  update() {
+    this.x -= this.speed;
+    this.bob += 0.015;
+    if (this.x < -300) {
+      this.x = canvas.width + Math.random() * 300 + 100;
+      this.y = Math.random() * (canvas.height * 0.35) + 60;
+    }
+  }
+  draw() {
+    ctx.save();
+    ctx.translate(this.x, this.y + Math.sin(this.bob) * 12);
+    ctx.scale(this.scale, this.scale);
+
+    // Airship Balloon
+    ctx.fillStyle = '#b45309';
+    ctx.fillRect(-65, -50, 130, 42);
+    ctx.fillRect(-75, -40, 150, 22);
+    ctx.fillRect(-55, -60, 110, 12);
+
+    // Wool accent stripes
+    ctx.fillStyle = '#fde68a';
+    ctx.fillRect(-35, -50, 22, 42);
+    ctx.fillRect(15, -50, 22, 42);
+
+    // Support ropes
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(-50, -8, 4, 16);
+    ctx.fillRect(46, -8, 4, 16);
+
+    // Gondola / Cabin
+    ctx.fillStyle = '#451a03';
+    ctx.fillRect(-35, 8, 70, 22);
+    
+    // Windows
+    ctx.fillStyle = '#fef08a';
+    ctx.fillRect(-24, 13, 12, 11);
+    ctx.fillRect(12, 13, 12, 11);
+
+    // Rotating Propeller
+    ctx.translate(-45, 18);
+    ctx.rotate(this.bob * 25);
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillRect(-3, -16, 6, 32);
+    ctx.fillRect(-16, -3, 32, 6);
+
+    ctx.restore();
+  }
+}
+
+class NWEmber {
+  constructor() {
+    this.reset();
+    this.y = Math.random() * (canvas.height || 600);
+  }
+  reset() {
+    this.x = Math.random() * (canvas.width || 800);
+    this.y = (canvas.height || 600) + 20;
+    this.size = Math.random() * 3 + 1.5;
+    this.speedY = Math.random() * 0.9 + 0.4;
+    this.speedX = Math.random() * 0.8 - 0.4;
+    this.opacity = Math.random() * 0.5 + 0.2;
+    this.flicker = Math.random() * Math.PI * 2;
+  }
+  update() {
+    this.y -= this.speedY;
+    this.x += this.speedX + Math.sin(this.flicker) * 0.4;
+    this.flicker += 0.03;
+    if (this.y < -20) {
+      this.reset();
+    }
+  }
+  draw() {
+    ctx.save();
+    ctx.globalAlpha = this.opacity;
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillRect(this.x, this.y, this.size, this.size);
+    ctx.restore();
+  }
+}
 
 // Animation classes
 class Bubble {
@@ -264,346 +395,13 @@ class Bubble {
     ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(0, 176, 255, ${this.opacity})`;
     ctx.fill();
-    // highlight
+    ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity * 1.5})`;
+    ctx.stroke();
+
+    // Bubble shine
     ctx.beginPath();
     ctx.arc(this.x - this.size * 0.3, this.y - this.size * 0.3, this.size * 0.2, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity * 1.5})`;
-    ctx.fill();
-  }
-}
-
-class Gear {
-  constructor(x, y, radius, teeth, speed, isLarge = false) {
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
-    this.teeth = teeth;
-    this.speed = speed;
-    this.angle = Math.random() * Math.PI * 2;
-    this.isLarge = isLarge;
-  }
-  update() {
-    this.angle += this.speed;
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.angle);
-
-    const woodColor = '#5c4027'; // Spruce wood
-    const highlightWood = '#705136';
-    const andesiteColor = '#818782';
-
-    // Teeth
-    ctx.fillStyle = woodColor;
-    ctx.beginPath();
-    for (let i = 0; i < this.teeth; i++) {
-      ctx.rotate((Math.PI * 2) / this.teeth);
-      ctx.fillRect(-this.radius * 0.12, -this.radius - (this.isLarge ? 8 : 6), this.radius * 0.24, 15);
-    }
-
-    // Outer Rim
-    ctx.fillStyle = highlightWood;
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Inner cutout
-    ctx.fillStyle = '#3a2617';
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius * 0.7, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Andesite alloy core (octagonal)
-    ctx.fillStyle = andesiteColor;
-    ctx.beginPath();
-    for(let i = 0; i < 8; i++) {
-        ctx.lineTo(Math.cos(i * Math.PI / 4) * (this.radius * 0.35), Math.sin(i * Math.PI / 4) * (this.radius * 0.35));
-    }
-    ctx.fill();
-
-    // Shaft hole
-    ctx.fillStyle = '#222';
-    ctx.beginPath();
-    ctx.arc(0, 0, this.radius * 0.15, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-  }
-}
-
-class Airship {
-  constructor() {
-    this.x = canvas.width + Math.random() * 500 + 100;
-    this.y = Math.random() * (canvas.height * 0.4) + 50;
-    this.speed = Math.random() * 0.4 + 0.2;
-    this.scale = Math.random() * 0.3 + 0.5;
-    this.bob = Math.random() * Math.PI * 2;
-  }
-  update() {
-    this.x -= this.speed;
-    this.bob += 0.01;
-    if (this.x < -300) {
-      this.x = canvas.width + Math.random() * 200 + 100;
-      this.y = Math.random() * (canvas.height * 0.4) + 50;
-    }
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y + Math.sin(this.bob) * 15);
-    ctx.scale(this.scale, this.scale);
-
-    // Blocky Balloon
-    ctx.fillStyle = '#bcaaa4';
-    ctx.fillRect(-60, -50, 120, 40); // Main body
-    ctx.fillRect(-70, -40, 140, 20); // Mid section
-    ctx.fillRect(-50, -60, 100, 10); // Top section
-
-    // Detail stripes (wool blocks)
-    ctx.fillStyle = '#8d6e63';
-    ctx.fillRect(-30, -50, 20, 40);
-    ctx.fillRect(10, -50, 20, 40);
-
-    // Blocky Ropes
-    ctx.fillStyle = '#5d4037';
-    ctx.fillRect(-45, -10, 4, 15);
-    ctx.fillRect(45, -10, 4, 15);
-
-    // Blocky Cabin
-    ctx.fillStyle = '#4e342e';
-    ctx.fillRect(-30, 5, 60, 20);
-    
-    // Cabin windows
-    ctx.fillStyle = '#ffecb3';
-    ctx.fillRect(-20, 10, 10, 10);
-    ctx.fillRect(10, 10, 10, 10);
-
-    // Blocky Propeller
-    ctx.translate(-40, 15);
-    ctx.rotate(this.bob * 20);
-    ctx.fillStyle = '#9e9e9e';
-    ctx.fillRect(-2, -15, 4, 30);
-    ctx.fillRect(-15, -2, 30, 4);
-
-    ctx.restore();
-  }
-}
-
-class Cloud {
-  constructor() {
-    this.x = Math.random() * canvas.width;
-    this.y = Math.random() * (canvas.height * 0.5);
-    this.speed = Math.random() * 0.2 + 0.05;
-    this.scale = Math.random() * 0.5 + 0.5;
-    this.opacity = Math.random() * 0.15 + 0.05;
-  }
-  update() {
-    this.x += this.speed;
-    if (this.x > canvas.width + 200) {
-      this.x = -200;
-      this.y = Math.random() * (canvas.height * 0.5);
-    }
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.scale(this.scale, this.scale);
-    ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-    
-    // Minecraft style cloud (blocky)
-    ctx.fillRect(0, 10, 80, 20);
-    ctx.fillRect(20, 0, 80, 20);
-    ctx.fillRect(40, 20, 50, 10);
-    ctx.fillRect(80, 10, 30, 20);
-    
-    ctx.restore();
-  }
-}
-
-class Airplane {
-  constructor() {
-    this.x = canvas.width + Math.random() * 500 + 100;
-    this.y = Math.random() * (canvas.height * 0.4) + 50;
-    this.speed = Math.random() * 0.8 + 0.5;
-    this.scale = Math.random() * 0.4 + 0.4;
-    this.bob = Math.random() * Math.PI * 2;
-  }
-  update() {
-    this.x -= this.speed;
-    this.bob += 0.02;
-    if (this.x < -300) {
-      this.x = canvas.width + Math.random() * 500 + 100;
-      this.y = Math.random() * (canvas.height * 0.4) + 50;
-    }
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y + Math.sin(this.bob) * 5);
-    ctx.scale(this.scale, this.scale);
-
-    // Blocky Biplane Body
-    ctx.fillStyle = '#3e2723';
-    ctx.fillRect(-40, -10, 80, 20);
-    
-    // Tail
-    ctx.fillRect(20, -20, 20, 10);
-    ctx.fillStyle = '#ffb300';
-    ctx.fillRect(30, -30, 10, 10); // Fin
-
-    // Wings (Top and Bottom)
-    ctx.fillStyle = '#5d4037';
-    ctx.fillRect(-20, -30, 40, 10); // Top wing
-    ctx.fillRect(-20, 10, 40, 10);  // Bottom wing
-
-    // Wing struts
-    ctx.fillStyle = '#8d6e63';
-    ctx.fillRect(-15, -20, 4, 30);
-    ctx.fillRect(11, -20, 4, 30);
-
-    // Propeller (Front)
-    ctx.translate(-45, 0);
-    ctx.rotate(this.bob * 30);
-    ctx.fillStyle = '#bdbdbd';
-    ctx.fillRect(-2, -20, 4, 40);
-    ctx.fillRect(-20, -2, 40, 4);
-
-    ctx.restore();
-  }
-}
-
-class Train {
-  constructor() {
-    this.x = canvas.width + 200;
-    this.y = canvas.height - 40;
-    this.speed = 0.5;
-    this.scale = 0.8;
-  }
-  update() {
-    this.x -= this.speed;
-    if (this.x < -400) {
-      this.x = canvas.width + 200;
-    }
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.scale(this.scale, this.scale);
-
-    // Wheels
-    ctx.fillStyle = '#212121';
-    for(let i=0; i<3; i++) {
-        ctx.fillRect(-30 + i*25, -10, 16, 16);
-    }
-    
-    // Boiler / main body
-    ctx.fillStyle = '#424242';
-    ctx.fillRect(-40, -40, 70, 30);
-    
-    // Cabin
-    ctx.fillStyle = '#5d4037'; // Wood cabin
-    ctx.fillRect(30, -50, 30, 40);
-    
-    // Cabin Roof
-    ctx.fillStyle = '#3e2723';
-    ctx.fillRect(25, -55, 40, 10);
-
-    // Window
-    ctx.fillStyle = '#ffecb3';
-    ctx.fillRect(35, -40, 10, 10);
-
-    // Smokestack
-    ctx.fillStyle = '#212121';
-    ctx.fillRect(-30, -60, 10, 20);
-
-    // Steam puffs
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-    const t = Date.now() / 200;
-    if (Math.floor(t) % 2 === 0) {
-        ctx.fillRect(-35, -75, 10, 10);
-    }
-    ctx.fillRect(-45, -90, 15, 15);
-
-    ctx.restore();
-  }
-}
-
-class Ship {
-  constructor() {
-    this.x = canvas.width + 800;
-    this.y = canvas.height * 0.75;
-    this.speed = 0.3;
-    this.scale = 0.6;
-    this.bob = Math.random() * Math.PI * 2;
-  }
-  update() {
-    this.x -= this.speed;
-    this.bob += 0.005;
-    if (this.x < -400) {
-      this.x = canvas.width + 800;
-      this.y = canvas.height * 0.75;
-    }
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(this.x, this.y + Math.sin(this.bob) * 10);
-    ctx.scale(this.scale, this.scale);
-
-    // Hull (Boat shape in blocky)
-    ctx.fillStyle = '#5d4037';
-    ctx.fillRect(-50, -20, 100, 20);
-    ctx.fillRect(-40, 0, 80, 10);
-    ctx.fillRect(-60, -30, 20, 10); // Front prow
-    ctx.fillRect(40, -30, 20, 10);  // Back stern
-
-    // Mast
-    ctx.fillStyle = '#3e2723';
-    ctx.fillRect(0, -100, 8, 80);
-
-    // Sails (Wool)
-    ctx.fillStyle = '#e0e0e0';
-    ctx.fillRect(-30, -90, 30, 40);
-    ctx.fillRect(10, -70, 20, 30);
-    
-    // Side Paddlewheels (Steampunk!)
-    ctx.fillStyle = '#795548';
-    ctx.fillRect(-15, -15, 30, 30);
-    ctx.fillStyle = '#3e2723';
-    // Paddlewheel cross
-    ctx.translate(0, 0);
-    ctx.rotate(this.bob * 10);
-    ctx.fillRect(-15, -2, 30, 4);
-    ctx.fillRect(-2, -15, 4, 30);
-
-    ctx.restore();
-  }
-}
-
-class Steam {
-  constructor() {
-    this.reset();
-    this.y = Math.random() * canvas.height;
-  }
-  reset() {
-    this.x = Math.random() * canvas.width;
-    this.y = canvas.height + 40;
-    this.radius = Math.random() * 40 + 20;
-    this.speedX = Math.random() * 0.6 - 0.3;
-    this.speedY = -(Math.random() * 0.8 + 0.4);
-    this.alpha = Math.random() * 0.15 + 0.03;
-    this.fade = Math.random() * 0.0005 + 0.0003;
-  }
-  update() {
-    this.x += this.speedX;
-    this.y += this.speedY;
-    this.alpha -= this.fade;
-    if (this.alpha <= 0 || this.y < -50) {
-      this.reset();
-    }
-  }
-  draw() {
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fillStyle = `rgba(230, 81, 0, ${this.alpha})`;
     ctx.fill();
   }
 }
@@ -1034,49 +832,25 @@ class Pokeball {
 // Generate Particles
 function initParticles() {
   bubbles = [];
-  gears = [];
   sparks = [];
-  steam = [];
-
-  airships = [];
-  clouds = [];
-  airplanes = [];
-  trains = [];
-  ships = [];
   rafts = [];
   pokemons = [];
   pokeballs = [];
+  seagulls = [];
+  nwGears = [];
+  nwAirships = [];
+  nwEmbers = [];
 
-  // Bubbles (Stranded at sea)
+  // Bubbles & Raft & Seagulls (Stranded at sea)
   for (let i = 0; i < 40; i++) {
     bubbles.push(new Bubble());
   }
   rafts.push(new Raft());
-
-  // Steam, Gears, Airships, Clouds, Airplanes, Trains & Ships (Democky edition)
-  for (let i = 0; i < 15; i++) {
-    steam.push(new Steam());
+  for (let i = 0; i < 5; i++) {
+    seagulls.push(new Seagull());
   }
-  for (let i = 0; i < 6; i++) {
-    clouds.push(new Cloud());
-  }
-  for (let i = 0; i < 2; i++) {
-    airships.push(new Airship());
-    airplanes.push(new Airplane());
-  }
-  trains.push(new Train());
-  ships.push(new Ship());
 
-  // Setup stationary spinning gears in background
-  gears.push(new Gear(100, 150, 60, 8, 0.003, true));
-  gears.push(new Gear(180, 190, 40, 6, -0.004, false));
-  gears.push(new Gear(80, 230, 30, 6, 0.005, false));
-  
-  gears.push(new Gear(canvas.width - 200, canvas.height - 200, 120, 12, 0.001, true));
-  gears.push(new Gear(canvas.width - 340, canvas.height - 180, 80, 10, -0.0015, true));
-  gears.push(new Gear(canvas.width - 240, canvas.height - 340, 70, 8, -0.0012, false));
-
-  // Sparks (Cobblemon)
+  // Sparks & Pokemon (Cobblemon)
   for (let i = 0; i < 50; i++) {
     sparks.push(new Spark());
   }
@@ -1088,16 +862,18 @@ function initParticles() {
   for (let i = 0; i < 3; i++) {
     pokeballs.push(new Pokeball());
   }
-  seagulls = [];
-  for (let i = 0; i < 5; i++) {
-    seagulls.push(new Seagull());
-  }
 
-  // Vanilla+ mobs
-  vanillaMobs = [];
-  vanillaMobs.push(new VanillaMob('creeper'));
-  vanillaMobs.push(new VanillaMob('zombie'));
-  vanillaMobs.push(new VanillaMob('skeleton'));
+  // Gears, Airship & Embers (Create: New World)
+  nwGears.push(new NWGear(120, 160, 50, 8, 0.003, true));
+  nwGears.push(new NWGear(190, 200, 35, 6, -0.004, false));
+  nwGears.push(new NWGear(canvas.width - 180, canvas.height - 180, 70, 10, 0.002, true));
+  nwGears.push(new NWGear(canvas.width - 270, canvas.height - 150, 45, 8, -0.003, false));
+
+  nwAirships.push(new NWAirship());
+
+  for (let i = 0; i < 35; i++) {
+    nwEmbers.push(new NWEmber());
+  }
 }
 
 // Background Animation Loop
@@ -1111,331 +887,11 @@ function animate() {
 
   if (activeTheme === 'theme-stranded') {
     drawOceanScene();
-  } else if (activeTheme === 'theme-democky') {
-    drawDemockyScene();
   } else if (activeTheme === 'theme-cobblemon') {
     drawPokemonScene();
-  } else if (activeTheme === 'theme-vanilla') {
-    drawVanillaScene();
-  } else if (activeTheme === 'theme-fabric26') {
-    drawFabric26Scene();
+  } else if (activeTheme === 'theme-new-world') {
+    drawNewWorldScene();
   }
-}
-
-// ============ VANILLA 26.2 - CHERRY BLOSSOM BIOME ============
-let mc26Time = 0;
-let cherryPetals = [];
-let cherryTrees = [];
-let cherryFlowers = [];
-let cherryInitialized = false;
-
-class CherryPetal {
-  constructor(W, H) {
-    this.reset(W, H, true);
-  }
-  reset(W, H, initial) {
-    this.x = Math.random() * W;
-    this.y = initial ? Math.random() * H : -10;
-    this.size = 2 + Math.random() * 3;
-    this.speedY = 0.3 + Math.random() * 0.6;
-    this.speedX = -0.2 + Math.random() * 0.4;
-    this.wobbleAmp = 15 + Math.random() * 25;
-    this.wobbleSpeed = 0.5 + Math.random() * 1.5;
-    this.wobblePhase = Math.random() * Math.PI * 2;
-    this.rot = Math.random() * Math.PI * 2;
-    this.rotSpeed = (Math.random() - 0.5) * 0.03;
-    this.alpha = 0.4 + Math.random() * 0.5;
-    // Petal colors: various pinks
-    const pinks = ['#ffb7c5', '#ffa0b4', '#ff8fa3', '#ffc4d6', '#ffcce0', '#fff0f5'];
-    this.color = pinks[Math.floor(Math.random() * pinks.length)];
-    this.baseX = this.x;
-  }
-  update(W, H) {
-    this.y += this.speedY;
-    this.wobblePhase += 0.015;
-    this.x = this.baseX + Math.sin(this.wobblePhase * this.wobbleSpeed) * this.wobbleAmp;
-    this.baseX += this.speedX;
-    this.rot += this.rotSpeed;
-    if (this.y > H + 10 || this.x < -20 || this.x > W + 20) {
-      this.reset(W, H, false);
-    }
-  }
-  draw(ctx) {
-    ctx.save();
-    ctx.translate(this.x, this.y);
-    ctx.rotate(this.rot);
-    ctx.globalAlpha = this.alpha;
-    ctx.fillStyle = this.color;
-    // Pixel-art petal shape (small blocky)
-    const s = this.size;
-    ctx.fillRect(-s, -s/2, s, s);
-    ctx.fillRect(0, -s, s, s);
-    ctx.globalAlpha = 1;
-    ctx.restore();
-  }
-}
-
-function initCherryScene(W, H) {
-  // Create cherry trees at fixed positions
-  cherryTrees = [];
-  const treePositions = [0.08, 0.25, 0.5, 0.72, 0.9];
-  treePositions.forEach(px => {
-    cherryTrees.push({
-      x: W * px + (Math.random() - 0.5) * 40,
-      trunkH: 80 + Math.random() * 60,
-      canopyR: 50 + Math.random() * 35,
-      canopyOffsetY: -10 + Math.random() * 10,
-      shade: Math.random()
-    });
-  });
-
-  // Petals
-  cherryPetals = [];
-  for (let i = 0; i < 80; i++) {
-    cherryPetals.push(new CherryPetal(W, H));
-  }
-
-  // Ground flowers
-  cherryFlowers = [];
-  for (let i = 0; i < 30; i++) {
-    cherryFlowers.push({
-      x: Math.random() * W,
-      type: Math.floor(Math.random() * 4), // 0-peony, 1-tulip, 2-small pink, 3-white
-      size: 3 + Math.random() * 3,
-      stemH: 6 + Math.random() * 8
-    });
-  }
-
-  cherryInitialized = true;
-}
-
-function drawCherryTree(ctx, x, groundY, trunkH, canopyW, shade, time) {
-  const B = 16; // Minecraft Block Size (16x16 pixels)
-  
-  // Snap trunk X to block grid
-  const bx = Math.floor(x / B) * B;
-  const blocksHigh = Math.max(4, Math.floor(trunkH / B));
-  const treeTopY = groundY - blocksHigh * B;
-
-  // --- TRUNK (16x16 Wood Log Blocks) ---
-  for (let b = 0; b < blocksHigh; b++) {
-    const logY = groundY - (b + 1) * B;
-    // Log base
-    ctx.fillStyle = '#52361b';
-    ctx.fillRect(bx, logY, B, B);
-    // Log bark texture details (pixel grid)
-    ctx.fillStyle = '#3a2512';
-    ctx.fillRect(bx + 2, logY + 2, 4, B - 4);
-    ctx.fillRect(bx + 10, logY + 4, 3, B - 8);
-    ctx.fillStyle = '#6e4927';
-    ctx.fillRect(bx + 7, logY + 2, 2, B - 4);
-  }
-
-  // --- BRANCHES (90-degree Minecraft log blocks) ---
-  // Left branch
-  const leftBranchY = treeTopY + B * 2;
-  ctx.fillStyle = '#52361b';
-  ctx.fillRect(bx - B, leftBranchY, B, B);
-  ctx.fillRect(bx - B * 2, leftBranchY - B, B, B);
-
-  // Right branch
-  const rightBranchY = treeTopY + B * 3;
-  ctx.fillRect(bx + B, rightBranchY, B, B);
-  ctx.fillRect(bx + B * 2, rightBranchY - B, B, B);
-
-  // --- BLOCKY CANOPY (Minecraft Leaf Block Grid) ---
-  // A helper function to draw a single 16x16 Minecraft Leaf Block
-  const drawLeafBlock = (gx, gy, colorVariant) => {
-    // Base block color
-    const baseColors = ['#ff9bb0', '#ff8fa3', '#ffaec0', '#ff8099'];
-    ctx.fillStyle = baseColors[colorVariant % baseColors.length];
-    ctx.fillRect(gx, gy, B, B);
-
-    // Inner 4x4 sub-pixels texture
-    const darkPixels = ['#e66b82', '#d85870', '#e06078'];
-    const lightPixels = ['#ffc8d6', '#ffdce6', '#ffffff'];
-
-    ctx.fillStyle = darkPixels[(colorVariant + 1) % darkPixels.length];
-    ctx.fillRect(gx + 2, gy + 2, 4, 4);
-    ctx.fillRect(gx + 10, gy + 6, 4, 4);
-    ctx.fillRect(gx + 4, gy + 10, 4, 4);
-
-    ctx.fillStyle = lightPixels[colorVariant % lightPixels.length];
-    ctx.fillRect(gx + 8, gy + 2, 4, 4);
-    ctx.fillRect(gx + 2, gy + 8, 4, 4);
-    ctx.fillRect(gx + 10, gy + 10, 4, 4);
-
-    // Subtle 3D block border shadow (bottom & right edge)
-    ctx.fillStyle = 'rgba(150, 40, 70, 0.25)';
-    ctx.fillRect(gx, gy + B - 2, B, 2);
-    ctx.fillRect(gx + B - 2, gy, 2, B);
-  };
-
-  // Define Minecraft tree foliage layer structure (stepped rectangular blocks)
-  // Layer 0 (Bottom wide layer)
-  const layer0Width = 7; 
-  const startX0 = bx - Math.floor(layer0Width / 2) * B;
-  for (let col = 0; col < layer0Width; col++) {
-    // Omit outer corners for classic Minecraft tree shape
-    if (col === 0 || col === layer0Width - 1) {
-      if ((col + bx) % 2 === 0) continue; 
-    }
-    drawLeafBlock(startX0 + col * B, treeTopY + B, (col * 3 + 1) % 4);
-    drawLeafBlock(startX0 + col * B, treeTopY + B * 2, (col * 5 + 2) % 4);
-  }
-
-  // Layer 1 (Middle layer)
-  const layer1Width = 5;
-  const startX1 = bx - Math.floor(layer1Width / 2) * B;
-  for (let col = 0; col < layer1Width; col++) {
-    drawLeafBlock(startX1 + col * B, treeTopY, (col * 2) % 4);
-    drawLeafBlock(startX1 + col * B, treeTopY - B, (col * 4 + 1) % 4);
-  }
-
-  // Layer 2 (Top cap layer)
-  const layer2Width = 3;
-  const startX2 = bx - Math.floor(layer2Width / 2) * B;
-  for (let col = 0; col < layer2Width; col++) {
-    drawLeafBlock(startX2 + col * B, treeTopY - B * 2, (col * 7 + 3) % 4);
-  }
-
-  // Top peak block
-  drawLeafBlock(bx, treeTopY - B * 3, 0);
-}
-
-function drawFabric26Scene() {
-  mc26Time += 0.005;
-  const W = canvas.width;
-  const H = canvas.height;
-  const groundY = H * 0.68;
-
-  if (!cherryInitialized || cherryTrees.length === 0) {
-    initCherryScene(W, H);
-  }
-
-  // === WARM PINK SKY ===
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
-  skyGrad.addColorStop(0, '#ffe8f0');   // Soft pink top
-  skyGrad.addColorStop(0.3, '#ffd6e0'); // Warmer pink
-  skyGrad.addColorStop(0.6, '#f5c6d0'); // Deeper pink horizon
-  skyGrad.addColorStop(1, '#e8b4be');   // Warm base
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, W, groundY);
-
-  // === SUN (square, Minecraft style) ===
-  ctx.fillStyle = '#ffe680';
-  const sunX = W * 0.82;
-  const sunY = H * 0.15;
-  const sunSize = 50;
-  ctx.fillRect(sunX - sunSize/2, sunY - sunSize/2, sunSize, sunSize);
-  // Sun glow
-  ctx.fillStyle = 'rgba(255, 230, 128, 0.15)';
-  ctx.fillRect(sunX - sunSize, sunY - sunSize, sunSize * 2, sunSize * 2);
-
-  // === CLOUDS (blocky) ===
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-  const c1x = (mc26Time * 18) % (W + 250) - 120;
-  ctx.fillRect(c1x, H * 0.1, 100, 24);
-  ctx.fillRect(c1x + 15, H * 0.1 - 16, 70, 16);
-  ctx.fillRect(c1x + 50, H * 0.1 - 24, 30, 12);
-
-  ctx.fillStyle = 'rgba(255, 240, 245, 0.5)';
-  const c2x = (mc26Time * 12 + W * 0.4) % (W + 300) - 150;
-  ctx.fillRect(c2x, H * 0.22, 140, 28);
-  ctx.fillRect(c2x + 20, H * 0.22 - 18, 100, 18);
-
-  // === DISTANT HILLS ===
-  ctx.fillStyle = '#c9a0b0';
-  for (let i = 0; i < W; i += 4) {
-    const hillH = 25 + Math.sin(i * 0.008 + 1) * 18 + Math.sin(i * 0.015) * 10;
-    ctx.fillRect(i, groundY - hillH, 4, hillH);
-  }
-  ctx.fillStyle = '#d4aab8';
-  for (let i = 0; i < W; i += 4) {
-    const hillH = 15 + Math.sin(i * 0.012 + 3) * 12 + Math.sin(i * 0.02) * 8;
-    ctx.fillRect(i, groundY - hillH, 4, hillH);
-  }
-
-  // === GROUND ===
-  // Pink-ish grass (Cherry Grove biome)
-  const grassGrad = ctx.createLinearGradient(0, groundY, 0, groundY + 16);
-  grassGrad.addColorStop(0, '#7ab85a');  // Green grass top
-  grassGrad.addColorStop(1, '#5d9940');
-  ctx.fillStyle = grassGrad;
-  ctx.fillRect(0, groundY, W, 16);
-
-  // Dirt
-  ctx.fillStyle = '#8b6141';
-  ctx.fillRect(0, groundY + 16, W, H - groundY - 16);
-
-  // Dirt texture
-  ctx.fillStyle = '#7a5535';
-  for (let i = 0; i < W; i += 20) {
-    for (let j = groundY + 20; j < H; j += 20) {
-      if ((i * 7 + j * 13) % 40 < 15) {
-        ctx.fillRect(i, j, 8, 8);
-      }
-    }
-  }
-  ctx.fillStyle = '#9b7050';
-  for (let i = 8; i < W; i += 24) {
-    for (let j = groundY + 24; j < H; j += 28) {
-      if ((i * 11 + j * 3) % 50 < 12) {
-        ctx.fillRect(i, j, 6, 6);
-      }
-    }
-  }
-
-  // === GRASS BLADES on ground ===
-  const grassColors = ['#6aad3d', '#5d9940', '#78b558', '#4e8a30'];
-  for (let i = 0; i < W; i += 8) {
-    const gc = grassColors[(i * 3) % grassColors.length];
-    ctx.fillStyle = gc;
-    const bh = 4 + Math.sin(i * 0.3 + mc26Time * 2) * 2;
-    ctx.fillRect(i, groundY - bh, 4, bh);
-  }
-
-  // === FLOWERS on ground ===
-  cherryFlowers.forEach(f => {
-    // Stem
-    ctx.fillStyle = '#3a7a22';
-    ctx.fillRect(f.x, groundY - f.stemH, 2, f.stemH);
-    // Flower head
-    if (f.type === 0) {
-      // Pink peony
-      ctx.fillStyle = '#ff8fa3';
-      ctx.fillRect(f.x - f.size/2, groundY - f.stemH - f.size, f.size, f.size);
-      ctx.fillStyle = '#ffb7c5';
-      ctx.fillRect(f.x - f.size/2 + 1, groundY - f.stemH - f.size + 1, f.size - 2, f.size - 2);
-    } else if (f.type === 1) {
-      // Red tulip
-      ctx.fillStyle = '#e84040';
-      ctx.fillRect(f.x - f.size/2, groundY - f.stemH - f.size, f.size, f.size);
-    } else if (f.type === 2) {
-      // Pink small flower
-      ctx.fillStyle = '#ffa0b4';
-      ctx.fillRect(f.x - 2, groundY - f.stemH - 4, 4, 4);
-      ctx.fillStyle = '#ffe0e8';
-      ctx.fillRect(f.x - 1, groundY - f.stemH - 3, 2, 2);
-    } else {
-      // White flower
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(f.x - 2, groundY - f.stemH - 4, 5, 4);
-      ctx.fillStyle = '#ffe066';
-      ctx.fillRect(f.x, groundY - f.stemH - 3, 2, 2);
-    }
-  });
-
-  // === CHERRY TREES ===
-  cherryTrees.forEach(t => {
-    drawCherryTree(ctx, t.x, groundY, t.trunkH, t.canopyR, t.shade, mc26Time);
-  });
-
-  // === FALLING PETALS ===
-  cherryPetals.forEach(p => {
-    p.update(W, H);
-    p.draw(ctx);
-  });
 }
 
 // ============ STRANDED AT SEA — FULL OCEAN SCENE ============
@@ -1549,223 +1005,6 @@ function drawOceanScene() {
 
   // Bubbles (underwater glow particles)
   bubbles.forEach(b => { b.update(); b.draw(); });
-}
-
-// ============ DEMOCKY EDITION — FULL STEAMPUNK SCENE ============
-let demockyTime = 0;
-function drawDemockyScene() {
-  demockyTime += 0.005;
-  const W = canvas.width;
-  const H = canvas.height;
-  const groundY = H * 0.72;
-
-  // === SUNSET SKY ===
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
-  skyGrad.addColorStop(0, '#1a1a2e');
-  skyGrad.addColorStop(0.25, '#16213e');
-  skyGrad.addColorStop(0.5, '#e94560');
-  skyGrad.addColorStop(0.7, '#e65100');
-  skyGrad.addColorStop(0.85, '#ff8f00');
-  skyGrad.addColorStop(1, '#ffca28');
-  ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, W, groundY + 10);
-
-  // Sun (setting)
-  ctx.fillStyle = '#ffca28';
-  ctx.beginPath();
-  ctx.arc(W * 0.75, groundY - 20, 50, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255, 202, 40, 0.08)';
-  ctx.beginPath();
-  ctx.arc(W * 0.75, groundY - 20, 120, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Blocky clouds
-  clouds.forEach(c => { c.update(); c.draw(); });
-
-  // === DISTANT FACTORY SILHOUETTES ===
-  ctx.fillStyle = '#1a1a2e';
-  // Factory 1
-  ctx.fillRect(W * 0.1, groundY - 100, 60, 100);
-  ctx.fillRect(W * 0.1 + 10, groundY - 140, 15, 40); // chimney
-  ctx.fillRect(W * 0.1 + 35, groundY - 130, 12, 30); // chimney 2
-  // Factory 2
-  ctx.fillRect(W * 0.25, groundY - 80, 80, 80);
-  ctx.fillRect(W * 0.25 + 20, groundY - 120, 12, 40);
-  ctx.fillRect(W * 0.25 + 50, groundY - 110, 10, 30);
-  // Factory 3 (far right)
-  ctx.fillRect(W * 0.82, groundY - 90, 70, 90);
-  ctx.fillRect(W * 0.82 + 15, groundY - 130, 14, 40);
-
-  // Factory windows (warm glow)
-  ctx.fillStyle = '#ffab00';
-  for (let fx = 0; fx < 3; fx++) {
-    for (let fy = 0; fy < 4; fy++) {
-      ctx.fillRect(W * 0.1 + 10 + fx * 15, groundY - 90 + fy * 22, 8, 10);
-    }
-  }
-  for (let fx = 0; fx < 4; fx++) {
-    for (let fy = 0; fy < 3; fy++) {
-      ctx.fillRect(W * 0.25 + 10 + fx * 16, groundY - 65 + fy * 22, 8, 10);
-    }
-  }
-
-  // Chimney smoke (animated)
-  ctx.fillStyle = 'rgba(100, 100, 100, 0.3)';
-  const smokeT = Date.now() / 300;
-  for (let i = 0; i < 4; i++) {
-    const sx = W * 0.1 + 15 + Math.sin(smokeT + i) * 8;
-    const sy = groundY - 140 - i * 20 - Math.sin(smokeT * 0.5 + i) * 5;
-    const sr = 8 + i * 5;
-    ctx.fillRect(sx - sr/2, sy - sr/2, sr, sr);
-  }
-  for (let i = 0; i < 3; i++) {
-    const sx = W * 0.25 + 25 + Math.sin(smokeT + i + 2) * 6;
-    const sy = groundY - 120 - i * 18 - Math.sin(smokeT * 0.7 + i) * 4;
-    const sr = 6 + i * 4;
-    ctx.fillRect(sx - sr/2, sy - sr/2, sr, sr);
-  }
-
-  // === AIRSHIPS & AIRPLANES (sky elements) ===
-  airships.forEach(a => { a.update(); a.draw(); });
-  airplanes.forEach(a => { a.update(); a.draw(); });
-
-  // === ROLLING HILLS (multiple layers) ===
-  // Far hills
-  ctx.fillStyle = '#33691e';
-  ctx.beginPath();
-  ctx.moveTo(0, H);
-  for (let x = 0; x <= W; x += 25) {
-    ctx.lineTo(x, groundY - 30 - Math.abs(Math.sin(x * 0.002 + 1)) * 60);
-  }
-  ctx.lineTo(W, H);
-  ctx.fill();
-
-  // Mid hills
-  ctx.fillStyle = '#2e7d32';
-  ctx.beginPath();
-  ctx.moveTo(0, H);
-  for (let x = 0; x <= W; x += 20) {
-    ctx.lineTo(x, groundY - 10 - Math.abs(Math.sin(x * 0.003 + 0.5)) * 40);
-  }
-  ctx.lineTo(W, H);
-  ctx.fill();
-
-  // === RAILS (train tracks) ===
-  const railY = groundY + 8;
-  ctx.fillStyle = '#5d4037';
-  ctx.fillRect(0, railY, W, 4);      // top rail
-  ctx.fillRect(0, railY + 12, W, 4); // bottom rail
-  // Sleepers
-  ctx.fillStyle = '#3e2723';
-  for (let x = 0; x < W; x += 30) {
-    ctx.fillRect(x, railY - 2, 16, 20);
-  }
-
-  // === GROUND ===
-  // Grass layer
-  ctx.fillStyle = '#1b5e20';
-  ctx.fillRect(0, groundY, W, 15);
-  ctx.fillStyle = '#2e7d32';
-  ctx.fillRect(0, groundY, W, 8);
-  // Dirt
-  ctx.fillStyle = '#4e342e';
-  ctx.fillRect(0, groundY + 15, W, H - groundY - 15);
-  // Cobblestone path
-  ctx.fillStyle = '#757575';
-  ctx.fillRect(0, groundY + 25, W, 20);
-  ctx.fillStyle = '#616161';
-  for (let x = 0; x < W; x += 24) {
-    ctx.fillRect(x, groundY + 25, 20, 8);
-    ctx.fillRect(x + 10, groundY + 35, 20, 8);
-  }
-  ctx.fillStyle = '#9e9e9e';
-  for (let x = 0; x < W; x += 48) {
-    ctx.fillRect(x + 5, groundY + 27, 8, 6);
-    ctx.fillRect(x + 20, groundY + 37, 8, 6);
-  }
-
-  // Grass blades on top
-  ctx.fillStyle = '#43a047';
-  for (let i = 0; i < W; i += 25) {
-    const bladeH = 4 + Math.sin(i * 0.8 + demockyTime * 2) * 3;
-    ctx.fillRect(i, groundY - bladeH, 3, bladeH);
-    ctx.fillRect(i + 10, groundY - bladeH + 1, 3, bladeH - 1);
-  }
-
-  // === CONVEYOR BELT (Create mod!) ===
-  const convX = W * 0.6;
-  const convY = groundY - 5;
-  ctx.fillStyle = '#424242';
-  ctx.fillRect(convX, convY, 120, 8);
-  // Moving items on belt
-  ctx.fillStyle = '#ff8f00';
-  const beltOffset = (Date.now() / 40) % 120;
-  for (let i = 0; i < 3; i++) {
-    const ix = convX + ((beltOffset + i * 40) % 120);
-    ctx.fillRect(ix, convY - 8, 12, 8);
-  }
-  // Belt supports
-  ctx.fillStyle = '#616161';
-  ctx.fillRect(convX - 5, convY, 8, 15);
-  ctx.fillRect(convX + 117, convY, 8, 15);
-
-  // === WATER MILL (far left) ===
-  ctx.fillStyle = '#5d4037';
-  ctx.fillRect(30, groundY - 50, 40, 50); // Building
-  ctx.fillStyle = '#3e2723';
-  ctx.fillRect(25, groundY - 55, 50, 8); // Roof
-  ctx.fillRect(20, groundY - 58, 60, 5); // Roof peak
-  // Window
-  ctx.fillStyle = '#ffab00';
-  ctx.fillRect(42, groundY - 40, 10, 12);
-  // Water wheel
-  ctx.save();
-  ctx.translate(75, groundY - 20);
-  ctx.rotate(demockyTime * 3);
-  ctx.fillStyle = '#795548';
-  ctx.fillRect(-15, -15, 30, 30);
-  ctx.fillStyle = '#5d4037';
-  ctx.fillRect(-2, -22, 4, 44);
-  ctx.fillRect(-22, -2, 44, 4);
-  ctx.rotate(Math.PI / 4);
-  ctx.fillRect(-2, -20, 4, 40);
-  ctx.fillRect(-20, -2, 40, 4);
-  ctx.restore();
-
-  // === SHIPS (horizon) ===
-  ships.forEach(s => { s.update(); s.draw(); });
-
-  // === TRAIN ===
-  trains.forEach(t => { t.update(); t.draw(); });
-
-  // === LANTERNS (warm glow dots along the ground) ===
-  ctx.fillStyle = 'rgba(255, 183, 77, 0.6)';
-  for (let i = 0; i < W; i += 150) {
-    // Pole
-    ctx.fillStyle = '#3e2723';
-    ctx.fillRect(i + 70, groundY - 30, 4, 30);
-    ctx.fillRect(i + 65, groundY - 32, 14, 4);
-    // Lantern glow
-    ctx.fillStyle = 'rgba(255, 183, 77, 0.6)';
-    ctx.fillRect(i + 67, groundY - 40, 10, 10);
-    ctx.fillStyle = 'rgba(255, 183, 77, 0.1)';
-    ctx.beginPath();
-    ctx.arc(i + 72, groundY - 35, 20, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // === GEARS (decorative Create mod) ===
-  // Draw gears after lanterns so they stay in foreground
-  gears.forEach(g => {
-    if (g.x > W) g.x = W - 200;
-    g.update();
-    g.draw();
-  });
-
-  // === STEAM PARTICLES ===
-  // Steam goes over everything
-  steam.forEach(s => { s.update(); s.draw(); });
 }
 
 // ============ COBBLEMON — FULL POKEMON SCENE ============
@@ -1895,348 +1134,142 @@ function drawPixelTree(x, groundY) {
   ctx.restore();
 }
 
-class VanillaMob {
-  constructor(type) {
-    this.type = type;
-    this.x = Math.random() * (canvas.width * 0.6) + canvas.width * 0.2;
-    this.speed = Math.random() * 0.4 + 0.3;
-    this.direction = Math.random() > 0.5 ? 1 : -1;
-    this.walkCycle = Math.random() * Math.PI * 2;
-    this.scale = 0.95;
-  }
-  update() {
-    this.walkCycle += 0.08;
-    this.x += this.speed * this.direction;
-    if (this.x < 50) this.direction = 1;
-    if (this.x > canvas.width - 50) this.direction = -1;
-  }
-  draw(groundY) {
-    ctx.save();
-    ctx.translate(this.x, groundY);
-    ctx.scale(this.direction * this.scale, this.scale);
-    const s = 3; // pixel size
-
-    // Leg swinging
-    const legOffset1 = Math.sin(this.walkCycle) * 3;
-    const legOffset2 = -Math.sin(this.walkCycle) * 3;
-
-    if (this.type === 'creeper') {
-      // Head
-      ctx.fillStyle = '#4caf50'; // Green
-      ctx.fillRect(-4 * s, -24 * s, 8 * s, 8 * s);
-      // Face
-      ctx.fillStyle = '#1b5e20'; // Dark green details
-      ctx.fillRect(-3 * s, -23 * s, s, s);
-      ctx.fillRect(2 * s, -20 * s, s, s);
-      ctx.fillStyle = '#000000'; // Eyes
-      ctx.fillRect(-3 * s, -21 * s, 2 * s, 2 * s);
-      ctx.fillRect(1 * s, -21 * s, 2 * s, 2 * s);
-      // Mouth
-      ctx.fillRect(-1.5 * s, -19 * s, 3 * s, 3 * s);
-      ctx.fillRect(-2.5 * s, -17 * s, s, 2 * s);
-      ctx.fillRect(1.5 * s, -17 * s, s, 2 * s);
-
-      // Body
-      ctx.fillStyle = '#388e3c'; // Green
-      ctx.fillRect(-3 * s, -16 * s, 6 * s, 10 * s);
-
-      // Legs
-      ctx.fillStyle = '#1b5e20'; // Back legs
-      ctx.fillRect(-4 * s + legOffset1, -6 * s, 3 * s, 6 * s);
-      ctx.fillRect(1 * s + legOffset2, -6 * s, 3 * s, 6 * s);
-      ctx.fillStyle = '#2e7d32'; // Front legs
-      ctx.fillRect(-2 * s + legOffset2, -6 * s, 3 * s, 6 * s);
-      ctx.fillRect(legOffset1, -6 * s, 3 * s, 6 * s);
-    } 
-    else if (this.type === 'zombie') {
-      // Head
-      ctx.fillStyle = '#558b2f';
-      ctx.fillRect(-4 * s, -28 * s, 8 * s, 8 * s);
-      // Eyes
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(-3 * s, -24 * s, 2 * s, s);
-      ctx.fillRect(1 * s, -24 * s, 2 * s, s);
-
-      // Shirt
-      ctx.fillStyle = '#00838f'; // Cyan
-      ctx.fillRect(-3 * s, -20 * s, 6 * s, 10 * s);
-
-      // Arms (Zombie arms reach forward!)
-      ctx.fillStyle = '#558b2f';
-      ctx.fillRect(1 * s, -19 * s, 7 * s, 3 * s);
-      ctx.fillStyle = '#006064'; // Sleeve
-      ctx.fillRect(1 * s, -19 * s, 2 * s, 3 * s);
-
-      // Pants
-      ctx.fillStyle = '#1a237e';
-      ctx.fillRect(-2.5 * s, -10 * s, 5 * s, 4 * s);
-
-      // Legs
-      ctx.fillStyle = '#0d47a1';
-      ctx.fillRect(-2.5 * s + legOffset1, -6 * s, 2.5 * s, 6 * s);
-      ctx.fillStyle = '#1a237e';
-      ctx.fillRect(0.2 * s + legOffset2, -6 * s, 2.5 * s, 6 * s);
-    } 
-    else if (this.type === 'skeleton') {
-      // Head
-      ctx.fillStyle = '#e0e0e0';
-      ctx.fillRect(-4 * s, -28 * s, 8 * s, 8 * s);
-      // Face
-      ctx.fillStyle = '#212121';
-      ctx.fillRect(-3 * s, -24 * s, 2 * s, 2 * s);
-      ctx.fillRect(1 * s, -24 * s, 2 * s, 2 * s);
-
-      // Ribs / Spine
-      ctx.fillStyle = '#cccccc';
-      ctx.fillRect(-1 * s, -20 * s, 2 * s, 10 * s);
-      ctx.fillStyle = '#e0e0e0';
-      ctx.fillRect(-3 * s, -19 * s, 6 * s, s);
-      ctx.fillRect(-3 * s, -17 * s, 6 * s, s);
-      ctx.fillRect(-3 * s, -15 * s, 6 * s, s);
-
-      // Arms (holding a bow, pointing forward)
-      ctx.fillStyle = '#e0e0e0';
-      // Left arm aiming forward
-      ctx.fillRect(1 * s, -18 * s, 4 * s, 1.5 * s);
-      // Right arm holding string
-      ctx.fillRect(-3 * s, -19 * s, 3 * s, 1.5 * s);
-
-      // Bow (Wood)
-      ctx.fillStyle = '#8d6e63'; // Brown bow
-      ctx.fillRect(5 * s, -22 * s, s, 9 * s);
-      ctx.fillRect(4 * s, -23 * s, s, s);
-      ctx.fillRect(4 * s, -14 * s, s, s);
-      
-      // Bow String
-      ctx.fillStyle = '#e0e0e0';
-      ctx.fillRect(3 * s, -22 * s, 0.5 * s, 9 * s);
-
-      // Legs
-      ctx.fillStyle = '#bdbdbd';
-      ctx.fillRect(-2 * s + legOffset1, -10 * s, s, 10 * s);
-      ctx.fillRect(1 * s + legOffset2, -10 * s, s, 10 * s);
-    }
-
-    ctx.restore();
-  }
-}
-
-// ============ VANILLA+ — DARK FOREST DUNGEON SCENE ============
-let vanillaTime = 0;
-let fireflies = [];
-let fallingLeaves = [];
-
-class Firefly {
-  constructor() { this.reset(); }
-  reset() {
-    this.x = Math.random() * (canvas.width || 800);
-    this.y = Math.random() * (canvas.height || 600) * 0.7;
-    this.size = Math.random() * 3 + 1.5;
-    this.speed = Math.random() * 0.3 + 0.1;
-    this.angle = Math.random() * Math.PI * 2;
-    this.pulse = Math.random() * Math.PI * 2;
-    this.drift = Math.random() * 0.5 + 0.2;
-  }
-  update() {
-    this.angle += this.speed * 0.02;
-    this.pulse += 0.05;
-    this.x += Math.sin(this.angle) * this.drift;
-    this.y += Math.cos(this.angle * 0.7) * this.drift * 0.5;
-    if (this.x < -20 || this.x > canvas.width + 20 || this.y < -20 || this.y > canvas.height) this.reset();
-  }
-  draw() {
-    const glow = Math.floor((Math.sin(this.pulse) + 1) * 1.5);
-    const size = Math.floor(this.size);
-    // Draw outer glow box
-    ctx.fillStyle = `rgba(180, 255, 50, ${0.1 + (Math.sin(this.pulse) + 1) * 0.15})`;
-    ctx.fillRect(Math.floor(this.x) - size - glow, Math.floor(this.y) - size - glow, (size + glow) * 2, (size + glow) * 2);
-    // Draw solid core pixel
-    ctx.fillStyle = `rgba(220, 255, 100, 0.85)`;
-    ctx.fillRect(Math.floor(this.x) - 1, Math.floor(this.y) - 1, 3, 3);
-  }
-}
-
-class FallingLeaf {
-  constructor() { this.reset(); }
-  reset() {
-    this.x = Math.random() * (canvas.width || 800);
-    this.y = -10;
-    this.size = Math.random() * 4 + 3;
-    this.speedY = Math.random() * 0.8 + 0.3;
-    this.speedX = Math.random() * 0.4 - 0.2;
-    this.rot = Math.random() * Math.PI * 2;
-    this.rotSpeed = (Math.random() - 0.5) * 0.03;
-    this.sway = Math.random() * Math.PI * 2;
-    this.swaySpeed = Math.random() * 0.02 + 0.01;
-    const leafColors = ['#8B4513', '#A0522D', '#D2691E', '#2e7d32', '#388e3c', '#cc7722'];
-    this.color = leafColors[Math.floor(Math.random() * leafColors.length)];
-  }
-  update() {
-    this.y += this.speedY;
-    this.sway += this.swaySpeed;
-    this.x += this.speedX + Math.sin(this.sway) * 0.5;
-    this.rot += this.rotSpeed;
-    if (this.y > canvas.height + 10) this.reset();
-  }
-  draw() {
-    ctx.save();
-    ctx.translate(Math.floor(this.x), Math.floor(this.y));
-    // Lock rotation to discrete angles to look like rotating pixels/blocks
-    const discreteRot = Math.floor(this.rot * 4) * (Math.PI / 2);
-    ctx.rotate(discreteRot);
-    ctx.fillStyle = this.color;
-    // Draw blocky leaf
-    const size = Math.floor(this.size);
-    ctx.fillRect(-size, -Math.floor(size / 2), size * 2, size);
-    ctx.restore();
-  }
-}
-
-function drawVanillaScene() {
-  vanillaTime += 0.005;
+// ============ CREATE: NEW WORLD — SUNRISE ENGINEERING SCENE ============
+let nwTime = 0;
+function drawNewWorldScene() {
+  nwTime += 0.006;
   const W = canvas.width;
   const H = canvas.height;
-  const groundY = H * 0.78;
+  const groundY = H * 0.70;
 
-  // === DARK NIGHT SKY ===
+  // === SUNRISE / GOLDEN SKY ===
   const skyGrad = ctx.createLinearGradient(0, 0, 0, groundY);
-  skyGrad.addColorStop(0, '#050a05');
-  skyGrad.addColorStop(0.3, '#0a1a0a');
-  skyGrad.addColorStop(0.6, '#102010');
-  skyGrad.addColorStop(1, '#1a3a1a');
+  skyGrad.addColorStop(0, '#1c1917');
+  skyGrad.addColorStop(0.3, '#451a03');
+  skyGrad.addColorStop(0.65, '#9a3412');
+  skyGrad.addColorStop(0.85, '#d97706');
+  skyGrad.addColorStop(1, '#fbbf24');
   ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, W, groundY);
+  ctx.fillRect(0, 0, W, groundY + 10);
 
-  // === STARS ===
-  for (let i = 0; i < 40; i++) {
-    const sx = (i * 97.3 + 30) % W;
-    const sy = (i * 53.1 + 10) % (H * 0.35);
-    const twinkle = (Math.sin(vanillaTime * 3 + i) + 1) * 0.3 + 0.2;
-    ctx.fillStyle = `rgba(255, 255, 230, ${twinkle})`;
-    ctx.fillRect(sx, sy, 2, 2);
+  // === RISING SUN ===
+  const sunX = W * 0.75;
+  const sunY = groundY - 30;
+  const sunGlow = ctx.createRadialGradient(sunX, sunY, 15, sunX, sunY, 130);
+  sunGlow.addColorStop(0, 'rgba(254, 240, 138, 0.7)');
+  sunGlow.addColorStop(0.4, 'rgba(245, 158, 11, 0.25)');
+  sunGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = sunGlow;
+  ctx.beginPath();
+  ctx.arc(sunX, sunY, 130, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Minecraft Square Golden Sun
+  ctx.fillStyle = '#fef08a';
+  ctx.fillRect(sunX - 25, sunY - 25, 50, 50);
+
+  // === DISTANT PINE MOUNTAINS (Back Layer) ===
+  ctx.fillStyle = '#064e3b';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 30) {
+    const my = groundY - 45 - Math.abs(Math.sin(x * 0.003 + 1.2)) * 80;
+    ctx.lineTo(x, my);
   }
+  ctx.lineTo(W, H);
+  ctx.fill();
 
-  // === SQUARE MOON ===
-  const moonX = W * 0.82;
-  const moonY = H * 0.12;
-  const moonSize = 25;
-  
-  // Outer square glow
-  ctx.fillStyle = 'rgba(230, 230, 200, 0.12)';
-  ctx.fillRect(moonX - moonSize - 6, moonY - moonSize - 6, (moonSize + 6) * 2, (moonSize + 6) * 2);
-  
-  // Base moon square
-  ctx.fillStyle = '#e8e8d0';
-  ctx.fillRect(moonX - moonSize, moonY - moonSize, moonSize * 2, moonSize * 2);
-  
-  // Blocky shadow overlay to create crescent moon effect
-  ctx.fillStyle = '#050a05';
-  ctx.fillRect(moonX - moonSize + 10, moonY - moonSize - 2, moonSize * 2, moonSize * 2 + 4);
-
-  // === DISTANT FOREST SILHOUETTES ===
-  ctx.fillStyle = '#0a150a';
-  for (let i = 0; i < W; i += 45) {
-    const treeH = 50 + Math.sin(i * 0.05) * 25 + Math.cos(i * 0.08) * 15;
-    const tx = i + 17;
-    const ty = groundY - treeH;
-    ctx.fillRect(i, ty, 35, treeH);
-    // Blocky spruce tree layers
-    ctx.fillRect(tx - 15, ty - 8, 30, 8);
-    ctx.fillRect(tx - 10, ty - 16, 20, 8);
-    ctx.fillRect(tx - 5, ty - 24, 10, 8);
+  // === MID LAYER HILLS & WORKSHOPS ===
+  ctx.fillStyle = '#047857';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 25) {
+    const my = groundY - 20 - Math.abs(Math.sin(x * 0.004 + 0.5)) * 50;
+    ctx.lineTo(x, my);
   }
+  ctx.lineTo(W, H);
+  ctx.fill();
 
-  // === CLOSER TREES ===
-  ctx.fillStyle = '#0d1f0d';
-  for (let i = 20; i < W; i += 100) {
-    const treeH = 80 + Math.sin(i * 0.03 + 1) * 30;
-    const tx = i + 17;
-    const ty = groundY - treeH;
-    ctx.fillRect(i + 10, ty, 15, treeH); // Trunk
-    
-    // Blocky canopy steps
-    ctx.fillRect(tx - 25, ty - 12, 50, 12);
-    ctx.fillRect(tx - 18, ty - 24, 36, 12);
-    ctx.fillRect(tx - 10, ty - 36, 20, 12);
-    ctx.fillRect(tx - 5, ty - 46, 10, 10);
+  // === WINDMILL (Lush Hill Landmark) ===
+  const wmX = W * 0.22;
+  const wmY = groundY - 35;
+  // Windmill Tower
+  ctx.fillStyle = '#78350f';
+  ctx.fillRect(wmX - 14, wmY - 45, 28, 45);
+  ctx.fillStyle = '#451a03';
+  ctx.fillRect(wmX - 16, wmY - 55, 32, 10);
+  // Windmill Window
+  ctx.fillStyle = '#fef08a';
+  ctx.fillRect(wmX - 5, wmY - 30, 10, 12);
+  // Rotating Windmill Sails
+  ctx.save();
+  ctx.translate(wmX, wmY - 50);
+  ctx.rotate(nwTime * 2);
+  ctx.fillStyle = '#e2e8f0';
+  for (let s = 0; s < 4; s++) {
+    ctx.rotate(Math.PI / 2);
+    ctx.fillRect(-3, -35, 6, 35);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillRect(3, -32, 12, 28);
+    ctx.fillStyle = '#e2e8f0';
   }
+  ctx.restore();
 
-  // === DUNGEON ENTRANCE (center) ===
-  const dX = W * 0.5 - 50;
-  const dY = groundY - 5;
-  // Stone archway
-  ctx.fillStyle = '#3a3a3a';
-  ctx.fillRect(dX, dY - 60, 15, 60);
-  ctx.fillRect(dX + 85, dY - 60, 15, 60);
-  ctx.fillRect(dX, dY - 70, 100, 15);
-  // Darker arch
-  ctx.fillStyle = '#2a2a2a';
-  ctx.fillRect(dX + 5, dY - 65, 10, 5);
-  ctx.fillRect(dX + 85, dY - 65, 10, 5);
-  // Dark inside
-  ctx.fillStyle = '#050505';
-  ctx.fillRect(dX + 15, dY - 55, 70, 55);
-  // Glowing runes on sides
-  const runeGlow = (Math.sin(vanillaTime * 4) + 1) * 0.5;
-  ctx.fillStyle = `rgba(76, 175, 80, ${0.3 + runeGlow * 0.5})`;
-  ctx.fillRect(dX + 3, dY - 45, 8, 3);
-  ctx.fillRect(dX + 3, dY - 35, 8, 3);
-  ctx.fillRect(dX + 3, dY - 25, 8, 3);
-  ctx.fillRect(dX + 89, dY - 45, 8, 3);
-  ctx.fillRect(dX + 89, dY - 35, 8, 3);
-  ctx.fillRect(dX + 89, dY - 25, 8, 3);
-  // Glowing eyes inside
-  const eyeGlow = (Math.sin(vanillaTime * 2 + 1) + 1) * 0.5;
-  ctx.fillStyle = `rgba(255, 50, 50, ${0.4 + eyeGlow * 0.6})`;
-  ctx.fillRect(dX + 35, dY - 35, 4, 4);
-  ctx.fillRect(dX + 55, dY - 35, 4, 4);
-
-  // === GROUND ===
-  const groundGrad = ctx.createLinearGradient(0, groundY, 0, H);
-  groundGrad.addColorStop(0, '#1a3a1a');
-  groundGrad.addColorStop(0.3, '#152a15');
-  groundGrad.addColorStop(1, '#0a1a0a');
-  ctx.fillStyle = groundGrad;
-  ctx.fillRect(0, groundY, W, H - groundY);
-
-  // Grass tufts
-  ctx.fillStyle = '#2e7d32';
-  for (let i = 0; i < W; i += 12) {
-    const h = 4 + Math.sin(i + vanillaTime * 2) * 2;
-    ctx.fillRect(i, groundY - h, 3, h);
-  }
-
-  // === PATH (stone bricks) ===
-  ctx.fillStyle = '#4a4a4a';
-  for (let i = 0; i < 6; i++) {
-    const px = dX + 25 + i * 8;
-    ctx.fillRect(px, dY, 6, 4);
-    ctx.fillRect(px + 3, dY + 5, 6, 4);
-  }
-
-  // === FIREFLIES ===
-  if (fireflies.length === 0) {
-    for (let i = 0; i < 20; i++) fireflies.push(new Firefly());
-  }
-  fireflies.forEach(f => { f.update(); f.draw(); });
-
-  // === FALLING LEAVES ===
-  if (fallingLeaves.length === 0) {
-    for (let i = 0; i < 12; i++) {
-      const leaf = new FallingLeaf();
-      leaf.y = Math.random() * H;
-      fallingLeaves.push(leaf);
+  // === FACTORY SILHOUETTES ===
+  ctx.fillStyle = '#292524';
+  ctx.fillRect(W * 0.80, groundY - 60, 70, 60);
+  ctx.fillRect(W * 0.80 + 12, groundY - 95, 14, 35); // Chimney
+  // Warm Factory Windows
+  ctx.fillStyle = '#f59e0b';
+  for (let fx = 0; fx < 3; fx++) {
+    for (let fy = 0; fy < 2; fy++) {
+      ctx.fillRect(W * 0.80 + 10 + fx * 18, groundY - 48 + fy * 20, 10, 12);
     }
   }
-  fallingLeaves.forEach(l => { l.update(); l.draw(); });
-
-  // === VANILLA MOBS ===
-  if (vanillaMobs.length === 0) {
-    vanillaMobs.push(new VanillaMob('creeper'));
-    vanillaMobs.push(new VanillaMob('zombie'));
-    vanillaMobs.push(new VanillaMob('skeleton'));
+  // Smoke Puffs
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  const smkT = Date.now() / 250;
+  for (let p = 0; p < 3; p++) {
+    const px = W * 0.80 + 19 + Math.sin(smkT + p) * 6;
+    const py = groundY - 95 - p * 18 - Math.sin(smkT * 0.5 + p) * 4;
+    const pr = 7 + p * 4;
+    ctx.fillRect(px - pr/2, py - pr/2, pr, pr);
   }
-  vanillaMobs.forEach(m => { m.update(); m.draw(groundY); });
+
+  // === AIRSHIPS ===
+  nwAirships.forEach(a => { a.update(); a.draw(); });
+
+  // === FOREGROUND GROUND & TERRAIN ===
+  // Lush Grass Top
+  ctx.fillStyle = '#10b981';
+  ctx.fillRect(0, groundY, W, 14);
+  ctx.fillStyle = '#059669';
+  ctx.fillRect(0, groundY + 14, W, 10);
+  // Rich Soil / Andesite Ground
+  ctx.fillStyle = '#451a03';
+  ctx.fillRect(0, groundY + 24, W, H - groundY - 24);
+
+  // Grass blades
+  ctx.fillStyle = '#34d399';
+  for (let i = 0; i < W; i += 18) {
+    const bh = 5 + Math.sin(i * 0.6 + nwTime * 2.5) * 3;
+    ctx.fillRect(i, groundY - bh, 3, bh);
+  }
+
+  // === TREES ===
+  drawPixelTree(W * 0.08, groundY);
+  drawPixelTree(W * 0.40, groundY);
+  drawPixelTree(W * 0.62, groundY);
+
+  // === SPINNING GEARS IN FOREGROUND / SIDES ===
+  nwGears.forEach(g => {
+    if (g.x > W) g.x = W - 180;
+    g.update();
+    g.draw();
+  });
+
+  // === AMBER EMBERS & PARTICLES ===
+  nwEmbers.forEach(e => { e.update(); e.draw(); });
 }
 
 // Change Modpack Theme & View
@@ -2249,10 +1282,8 @@ function switchModpack(packKey) {
   const oldTheme = activeTheme;
   
   if (packKey === 'stranded_at_sea') activeTheme = 'theme-stranded';
-  else if (packKey === 'democky_edition') activeTheme = 'theme-democky';
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
-  else if (packKey === 'vanilla_plus') activeTheme = 'theme-vanilla';
-  else if (packKey === 'fabric_26_2') activeTheme = 'theme-fabric26';
+  else if (packKey === 'create_new_world') activeTheme = 'theme-new-world';
   
   // Re-initialize particles on theme change (clears old ones and respawns them)
   initParticles();
@@ -2316,22 +1347,15 @@ async function checkServerStatus(packKey) {
       if (data.online) {
         // MOTD Synchronization
         const motd = data.motd?.clean?.trim() || "";
-        const motdPackMapping = {
-          '0': 'vanilla_plus',
-          'v': 'fabric_26_2',
-          '1': 'stranded_at_sea',
-          '2': 'democky_edition',
-          '3': 'cobblemon'
-        };
+        const m = motd.toLowerCase();
         
-        // Find if motd starts with or contains our target numbers
         let serverPack = null;
-        for (const [key, packName] of Object.entries(motdPackMapping)) {
-          // Strict check: MOTD is exactly the digit, or starts with the digit and a space/separator
-          if (motd === key || motd.startsWith(`${key} `) || motd.startsWith(`[${key}]`)) {
-            serverPack = packName;
-            break;
-          }
+        if (m.includes('new world') || m.includes('colonizers') || m.includes('create+') || m.startsWith('2') || m.startsWith('c') || m.startsWith('w')) {
+          serverPack = 'create_new_world';
+        } else if (m.includes('stranded') || m.includes('sea') || m.startsWith('1')) {
+          serverPack = 'stranded_at_sea';
+        } else if (m.includes('cobblemon') || m.startsWith('3')) {
+          serverPack = 'cobblemon';
         }
 
         // Highlight the server's active pack in the sidebar
@@ -2534,14 +1558,20 @@ if (settingsNickname) {
   settingsNickname.addEventListener('input', (e) => {
     updateUserAvatar(e.target.value);
     if (usernameInput) usernameInput.value = e.target.value;
+    if (configSettings) {
+      configSettings.nickname = e.target.value;
+      window.api.saveSettings(configSettings);
+    }
   });
 }
 if (usernameInput) {
   usernameInput.addEventListener('input', (e) => {
     updateUserAvatar(e.target.value);
     if (settingsNickname) settingsNickname.value = e.target.value;
-    settings.nickname = e.target.value;
-    window.api.saveSettings(settings);
+    if (configSettings) {
+      configSettings.nickname = e.target.value;
+      window.api.saveSettings(configSettings);
+    }
   });
 }
 
@@ -3284,6 +2314,39 @@ playBtn.addEventListener('click', async () => {
     return;
   }
 
+  // 1. Nickname Check & Verification
+  const rawNick = (usernameInput ? usernameInput.value : '') || (settingsNickname ? settingsNickname.value : '') || (configSettings ? configSettings.nickname : '') || '';
+  const trimmedNick = rawNick.trim();
+
+  // If nickname is empty or default 'Player' (or 'player')
+  if (!trimmedNick || trimmedNick.toLowerCase() === 'player') {
+    if (usernameInput) {
+      usernameInput.focus();
+      usernameInput.select();
+    }
+    const proceed = await showCustomConfirm(
+      'Ви використовуєте стандартний нікнейм "Player". Бажаєте змінити його на власний перед грою, щоб зберегти свій інвентар та ігровий прогрес?',
+      'Перевірка нікнейму',
+      'warning',
+      'Грати як Player'
+    );
+    if (!proceed) {
+      if (usernameInput) {
+        usernameInput.focus();
+        usernameInput.select();
+      }
+      return;
+    }
+  }
+
+  // Ensure current trimmed nickname is saved immediately to settings
+  const finalNick = trimmedNick || 'Player';
+  if (configSettings) configSettings.nickname = finalNick;
+  if (usernameInput) usernameInput.value = finalNick;
+  if (settingsNickname) settingsNickname.value = finalNick;
+  updateUserAvatar(finalNick);
+  if (configSettings) await window.api.saveSettings(configSettings);
+
   // Update last played timestamp and re-sort
   localStorage.setItem('lastPlayed_' + activePack, Date.now());
   sortModpacks();
@@ -3311,7 +2374,7 @@ playBtn.addEventListener('click', async () => {
     progressStatus.textContent = 'Launching client...';
     btnText.textContent = 'WAIT...';
 
-    const launchRes = await window.api.startLaunch(activePack);
+    const launchRes = await window.api.startLaunch(activePack, finalNick);
     if (!launchRes.success) {
       if (launchRes.javaError) {
         launcherState = 'error';
@@ -3663,23 +2726,10 @@ async function initApp() {
   // Sort modpacks based on last played initially
   sortModpacks();
 
-  // Switch to last selected modpack from saved settings (fallback to last played or cobblemon)
+  // Load saved pack or default to create_new_world
   let initialPack = (configSettings && configSettings.selectedPack && packDetails[configSettings.selectedPack]) 
     ? configSettings.selectedPack 
-    : null;
-    
-  if (!initialPack) {
-    let latestPack = 'cobblemon';
-    let maxTime = -1;
-    for (const key in packDetails) {
-      const time = parseInt(localStorage.getItem('lastPlayed_' + key) || '0', 10);
-      if (time > maxTime) {
-        maxTime = time;
-        latestPack = key;
-      }
-    }
-    initialPack = latestPack;
-  }
+    : 'create_new_world';
   switchModpack(initialPack);
 }
 
@@ -3692,7 +2742,7 @@ function sortModpacks(activeServerPack = null) {
   items.sort((a, b) => {
     const packA = a.dataset.pack;
     const packB = b.dataset.pack;
-    
+
     // Priority 1: Currently running on server
     if (activeServerPack) {
       if (packA === activeServerPack) return -1;

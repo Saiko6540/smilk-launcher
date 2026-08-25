@@ -52,7 +52,7 @@ const defaultSettings = {
   ramGb: 12,
   javaPath: '',
   jvmArgs: '-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC',
-  selectedPack: 'stranded_at_sea',
+  selectedPack: 'create_new_world',
   mockMode: false // Disabled by default for normal production play
 };
 
@@ -70,16 +70,16 @@ const modpacks = {
       mrpack_url: 'mock://stranded_at_sea/pack.mrpack'
     }
   },
-  democky_edition: {
-    name: 'Create +',
-    mcVersion: '1.20.1',
-    loader: 'forge-47.2.0',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/createplus/modpack_test_1.0.0.mrpack',
+  create_new_world: {
+    name: 'Create: New World',
+    mcVersion: '1.21.1',
+    loader: 'neoforge-21.1.248',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/createnewworld/createnewworld.mrpack',
     mockConfig: {
-      version: '1.0.5',
-      minecraft: '1.20.1',
-      loader: 'forge-47.2.0',
-      mrpack_url: 'mock://democky_edition/pack.mrpack'
+      version: '1.0.0',
+      minecraft: '1.21.1',
+      loader: 'neoforge-21.1.248',
+      mrpack_url: 'mock://create_new_world/pack.mrpack'
     }
   },
   cobblemon: {
@@ -92,41 +92,6 @@ const modpacks = {
       minecraft: '1.20.1',
       loader: 'fabric-0.15.11',
       mrpack_url: 'mock://cobblemon/pack.mrpack'
-    }
-  },
-  vanilla_plus: {
-    name: 'Vanilla+',
-    mcVersion: '1.21.1',
-    loader: 'fabric-0.16.5',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/vanilla+/Super%20vanilla.mrpack',
-    mockConfig: {
-      version: '1.0.0',
-      minecraft: '1.21.1',
-      loader: 'fabric-0.16.5',
-      mrpack_url: 'mock://vanilla_plus/pack.mrpack'
-    }
-  },
-  fabric_26_2: {
-    name: 'Vanilla 26.2',
-    mcVersion: '26.2',
-    loader: 'fabric-0.19.3',
-    configUrl: 'vanilla',
-    extraMods: [
-      'https://cdn.modrinth.com/data/P7dR8mSH/versions/3gT0I5vt/fabric-api-0.156.0%2B26.2.jar',
-      'https://cdn.modrinth.com/data/AANobbMI/versions/2Yom1N68/sodium-fabric-0.9.1%2Bmc26.2.jar',
-      'https://cdn.modrinth.com/data/YL57xq9U/versions/oaD6KQls/iris-fabric-1.11.2%2Bmc26.2.jar',
-      'https://cdn.modrinth.com/data/9eGKb6K1/versions/3SOh5iiX/voicechat-fabric-2.6.21%2B26.2.jar',
-      'https://cdn.modrinth.com/data/uCdwusMi/versions/gBf0SaV1/DistantHorizons-3.2.0-b-26.2-fabric-neoforge.jar',
-      'https://cdn.modrinth.com/data/yBW8D80W/versions/jBLH7Qy8/lambdynamiclights-4.12.2%2B26.2.jar',
-      'https://cdn.modrinth.com/data/w7ThoJFB/versions/QWTzJNJY/zoomify-2.16.1%2B26.2.jar',
-      'https://cdn.modrinth.com/data/Ha28R6CL/versions/bdhiINYC/fabric-language-kotlin-1.13.13%2Bkotlin.2.4.10.jar',
-      'https://cdn.modrinth.com/data/1eAoo2KR/versions/cnfPzuFU/yet_another_config_lib_v3-3.9.6%2B26.2-fabric.jar'
-    ],
-    mockConfig: {
-      version: '1.0.0',
-      minecraft: '26.2',
-      loader: 'fabric-0.19.3',
-      mrpack_url: 'mock://fabric_26_2/pack.mrpack'
     }
   }
 };
@@ -830,8 +795,11 @@ ipcMain.handle('start-update', async (event, packKey) => {
 });
 
 // Start Launch IPC
-ipcMain.handle('start-launch', async (event, packKey) => {
+ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
   const settings = fs.existsSync(settingsPath) ? JSON.parse(fs.readFileSync(settingsPath, 'utf8')) : defaultSettings;
+  if (overrideNickname && typeof overrideNickname === 'string' && overrideNickname.trim()) {
+    settings.nickname = overrideNickname.trim();
+  }
   const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
   const pack = modpacks[packKey];
 
@@ -911,19 +879,19 @@ ipcMain.handle('install-java', async (event, requiredVersion) => {
   const AdmZip = require('adm-zip');
   const https = require('https');
 
-  const javaDir = path.join(userDataPath, 'game_data', 'java', `jre_${requiredVersion}`);
+  const javaDir = path.join(userDataPath, 'game_data', 'java', `jre-${requiredVersion}`);
   if (fs.existsSync(javaDir)) {
     fs.rmSync(javaDir, { recursive: true, force: true });
   }
   fs.mkdirSync(javaDir, { recursive: true });
 
-  const zipPath = path.join(javaDir, `jre_${requiredVersion}.zip`);
+  const zipPath = path.join(userDataPath, 'game_data', 'java', `jre-${requiredVersion}.zip`);
   const apiUrl = `https://api.adoptium.net/v3/binary/latest/${requiredVersion}/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk`;
 
   // Download ZIP with redirect support
   function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
-      https.get(url, (res) => {
+      https.get(url, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           downloadFile(res.headers.location, dest).then(resolve).catch(reject);
         } else if (res.statusCode === 200) {
@@ -943,27 +911,29 @@ ipcMain.handle('install-java', async (event, requiredVersion) => {
   // Extract ZIP
   const zip = new AdmZip(zipPath);
   zip.extractAllTo(javaDir, true);
-  fs.unlinkSync(zipPath); // Delete zip
+  try {
+    fs.unlinkSync(zipPath); // Delete zip
+  } catch (e) {}
 
-  // Find javaw.exe
-  let newJavaPath = null;
+  // Find javaw.exe / java.exe
   function findJavaw(dir) {
+    if (!fs.existsSync(dir)) return null;
     const files = fs.readdirSync(dir);
     for (const f of files) {
       const fullPath = path.join(dir, f);
       if (fs.statSync(fullPath).isDirectory()) {
         const found = findJavaw(fullPath);
         if (found) return found;
-      } else if (f.toLowerCase() === 'javaw.exe') {
+      } else if (f.toLowerCase() === 'javaw.exe' || f.toLowerCase() === 'java.exe') {
         return fullPath;
       }
     }
     return null;
   }
-  newJavaPath = findJavaw(javaDir);
+  const newJavaPath = findJavaw(javaDir);
 
   if (!newJavaPath) {
-    throw new Error("Downloaded Java but couldn't find javaw.exe inside!");
+    throw new Error("Downloaded Java but couldn't find java executable inside!");
   }
 
   // Update Settings

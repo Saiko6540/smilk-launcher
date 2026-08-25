@@ -1,32 +1,70 @@
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
 
 /**
- * Helper to download a file with progress tracking and return a Promise
+ * Helper to download a file with progress tracking, redirect following, and robust error handling
  */
 function downloadFile(url, destPath, onProgress) {
   return new Promise((resolve, reject) => {
     fs.mkdirSync(path.dirname(destPath), { recursive: true });
-    const file = fs.createWriteStream(destPath);
-    let downloadedBytes = 0;
 
-    const doDownload = (currentUrl) => {
-      const request = https.get(currentUrl, (response) => {
-        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
-          // Follow redirect
-          doDownload(response.headers.location);
-          return;
+    let file = null;
+    let isFinished = false;
+
+    const doDownload = (currentUrl, redirectCount = 0) => {
+      if (redirectCount > 15) {
+        if (file) file.close();
+        fs.unlink(destPath, () => {});
+        return reject(new Error(`Too many redirects downloading ${url}`));
+      }
+
+      let parsed;
+      try {
+        parsed = new URL(currentUrl);
+      } catch (err) {
+        if (file) file.close();
+        fs.unlink(destPath, () => {});
+        return reject(err);
+      }
+
+      const client = parsed.protocol === 'http:' ? http : https;
+      const options = {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 smilk-launcher',
+          'Accept': '*/*'
         }
-        
+      };
+
+      const request = client.request(options, (response) => {
+        // Handle Redirects
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+          let nextUrl = response.headers.location;
+          if (!nextUrl.startsWith('http://') && !nextUrl.startsWith('https://')) {
+            nextUrl = new URL(nextUrl, currentUrl).href;
+          }
+          response.resume();
+          return doDownload(nextUrl, redirectCount + 1);
+        }
+
         if (response.statusCode !== 200) {
-          reject(new Error(`Failed to download: Status Code ${response.statusCode}`));
-          return;
+          response.resume();
+          if (file) file.close();
+          fs.unlink(destPath, () => {});
+          return reject(new Error(`Failed to download ${currentUrl}: HTTP ${response.statusCode}`));
         }
 
         const totalBytes = parseInt(response.headers['content-length'], 10) || 0;
+        let downloadedBytes = 0;
+
+        file = fs.createWriteStream(destPath);
 
         response.on('data', (chunk) => {
           downloadedBytes += chunk.length;
@@ -38,25 +76,32 @@ function downloadFile(url, destPath, onProgress) {
 
         response.on('end', () => {
           file.end(() => {
+            isFinished = true;
             resolve();
           });
+        });
+
+        response.on('error', (err) => {
+          if (!isFinished) {
+            if (file) file.close();
+            fs.unlink(destPath, () => {});
+            reject(err);
+          }
         });
       });
 
       request.on('error', (err) => {
-        file.close();
-        fs.unlink(destPath, () => {}); // delete partial file on error
-        reject(err);
+        if (!isFinished) {
+          if (file) file.close();
+          fs.unlink(destPath, () => {});
+          reject(err);
+        }
       });
+
+      request.end();
     };
 
     doDownload(url);
-
-    file.on('error', (err) => {
-      file.close();
-      fs.unlink(destPath, () => {});
-      reject(err);
-    });
   });
 }
 
@@ -196,7 +241,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
       console.warn("Failed to auto-resolve branch URL for .mrpack file:", err);
     }
   }
-  if (configUrl.endsWith('.mrpack')) {
+  if (configUrl.split('?')[0].endsWith('.mrpack')) {
     try {
       if (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com')) {
         const rawUrl = configUrl.replace('github.com', 'raw.githubusercontent.com').replace('/raw/', '/');
@@ -229,11 +274,21 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
             }
           } catch(e) {}
         }
+
+        let actualDownloadUrl = configUrl;
+        if (match) {
+          // It's a Git LFS file - convert to media.githubusercontent.com for full binary download
+          const lfsMatch = configUrl.match(/github(?:usercontent)?\.com\/(?:raw\/)?([^\/]+)\/([^\/]+)\/(?:raw\/)?([^\/]+)\/(.+)/);
+          if (lfsMatch) {
+            const [_, owner, repo, branch, filepath] = lfsMatch;
+            actualDownloadUrl = `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${filepath}`;
+          }
+        }
         
         remoteConfig = {
           version: match ? match[1] : 'github-raw-' + Date.now(),
           commitMessage,
-          mrpack_url: configUrl
+          mrpack_url: actualDownloadUrl
         };
       } else {
         remoteConfig = {
@@ -492,13 +547,29 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
     console.warn('Failed to delete temp mrpack file:', e);
   }
 
+  // Detect loader from dependencies
+  let detectedLoader = remoteConfig.loader;
+  if (!detectedLoader) {
+    if (indexJson.dependencies && indexJson.dependencies['neoforge']) {
+      detectedLoader = `neoforge-${indexJson.dependencies['neoforge']}`;
+    } else if (indexJson.dependencies && indexJson.dependencies['fabric-loader']) {
+      detectedLoader = `fabric-${indexJson.dependencies['fabric-loader']}`;
+    } else if (indexJson.dependencies && indexJson.dependencies['forge']) {
+      detectedLoader = `forge-${indexJson.dependencies['forge']}`;
+    } else if (indexJson.dependencies && indexJson.dependencies['quilt-loader']) {
+      detectedLoader = `quilt-${indexJson.dependencies['quilt-loader']}`;
+    } else {
+      detectedLoader = 'vanilla';
+    }
+  }
+
   // Write new local version config
   const finalConfig = {
     version: remoteConfig.version,
     packVersion: indexJson.versionId || '1.0.0',
     commitMessage: remoteConfig.commitMessage,
-    minecraft: remoteConfig.minecraft || indexJson.dependencies.minecraft,
-    loader: remoteConfig.loader || (indexJson.dependencies['fabric-loader'] ? `fabric-${indexJson.dependencies['fabric-loader']}` : `forge-${indexJson.dependencies['forge']}`),
+    minecraft: remoteConfig.minecraft || (indexJson.dependencies && indexJson.dependencies.minecraft) || '1.21.1',
+    loader: detectedLoader,
     mrpack_url: remoteConfig.mrpack_url,
     addons: {
       shaders: targetShaders
