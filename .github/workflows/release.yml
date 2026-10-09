@@ -30,11 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Linux build dependencies (RPM & Flatpak tools)
+      - name: Install Linux build dependencies (RPM tools)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm flatpak flatpak-builder libarchive-tools
+          sudo apt-get install -y rpm libarchive-tools
 
       - name: Build & Publish Release
         env:
@@ -43,6 +43,6 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then
             npx electron-builder --win --x64 --publish always
           else
-            npx electron-builder --linux AppImage rpm flatpak tar.gz --publish always
+            npx electron-builder --linux --publish always
           fi
         shell: bash
