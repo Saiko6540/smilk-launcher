@@ -359,10 +359,10 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         const mcVersion = remoteConfig.minecraft || localConfig.minecraft;
         const loader = remoteConfig.loader || localConfig.loader;
         const isFabric = loader.startsWith('fabric');
-        // Minecraft 1.21.1 (Vanilla+) is Fabric-based, so it specifically requires the Iris shaders mod.
-        // Forge-based packs will use Oculus.
-        const modSlug = isFabric ? 'iris' : 'oculus';
-        const modLoader = isFabric ? 'fabric' : 'forge';
+        const isNeoForge = loader.startsWith('neoforge');
+        // Minecraft 1.21.1 Fabric and NeoForge require Iris; Forge-based older packs use Oculus.
+        const modSlug = (isFabric || isNeoForge) ? 'iris' : 'oculus';
+        const modLoader = isFabric ? 'fabric' : (isNeoForge ? 'neoforge' : 'forge');
 
         try {
           const versionsUrl = `https://api.modrinth.com/v2/project/${modSlug}/version?loaders=["${modLoader}"]&game_versions=["${mcVersion}"]`;
@@ -439,12 +439,12 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   // Handle Shaders Addon dynamically
   if (targetShaders) {
     const mcVersion = remoteConfig.minecraft || indexJson.dependencies.minecraft;
-    const loader = remoteConfig.loader || (indexJson.dependencies['fabric-loader'] ? `fabric-${indexJson.dependencies['fabric-loader']}` : `forge-${indexJson.dependencies['forge']}`);
+    const loader = remoteConfig.loader || (indexJson.dependencies['fabric-loader'] ? `fabric-${indexJson.dependencies['fabric-loader']}` : (indexJson.dependencies['neoforge'] ? `neoforge-${indexJson.dependencies['neoforge']}` : `forge-${indexJson.dependencies['forge']}`));
     const isFabric = loader.startsWith('fabric');
-    // Minecraft 1.21.1 (Vanilla+) is Fabric-based, so it specifically requires the Iris shaders mod.
-    // Forge-based packs will use Oculus.
-    const modSlug = isFabric ? 'iris' : 'oculus';
-    const modLoader = isFabric ? 'fabric' : 'forge';
+    const isNeoForge = loader.startsWith('neoforge');
+    // Minecraft 1.21.1 Fabric and NeoForge require Iris; Forge-based older packs use Oculus.
+    const modSlug = (isFabric || isNeoForge) ? 'iris' : 'oculus';
+    const modLoader = isFabric ? 'fabric' : (isNeoForge ? 'neoforge' : 'forge');
 
     sendProgress({ status: 'extracting', message: `Querying shaders support (${modSlug}) from Modrinth...` });
     try {

@@ -34,6 +34,25 @@ body.theme-cobblemon {
   --border-color: rgba(255, 23, 68, 0.2);
 }
 
+body.theme-pluto {
+  --primary: #c084fc;
+  --primary-rgb: 192, 132, 252;
+  --accent: #38bdf8;
+  --accent-rgb: 56, 189, 248;
+  --bg-gradient: linear-gradient(135deg, #090616 0%, #1e103d 45%, #04192f 100%);
+  --glow: 0 0 25px rgba(192, 132, 252, 0.45);
+  --card-bg: rgba(22, 14, 40, 0.65);
+  --border-color: rgba(192, 132, 252, 0.25);
+}
+
+body.theme-pluto .app-container {
+  background: linear-gradient(135deg, rgba(8, 6, 16, 0.72) 0%, rgba(16, 10, 32, 0.78) 50%, rgba(4, 16, 28, 0.82) 100%), url('screenshots/pluto.png') no-repeat center center / cover;
+}
+
+body.theme-pluto .backdrop-glow {
+  background: radial-gradient(circle at 65% 25%, rgba(192, 132, 252, 0.35) 0%, rgba(56, 189, 248, 0.2) 45%, transparent 70%);
+}
+
 
 
 /* --- Base Reset & Typography --- */

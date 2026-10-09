@@ -52,7 +52,7 @@ const defaultSettings = {
   ramGb: 12,
   javaPath: '',
   jvmArgs: '-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC',
-  selectedPack: 'create_new_world',
+  selectedPack: 'pluto',
   mockMode: false // Disabled by default for normal production play
 };
 
@@ -92,6 +92,18 @@ const modpacks = {
       minecraft: '1.20.1',
       loader: 'fabric-0.15.11',
       mrpack_url: 'mock://cobblemon/pack.mrpack'
+    }
+  },
+  pluto: {
+    name: 'Pluto',
+    mcVersion: '1.21.1',
+    loader: 'neoforge-21.1.257',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/Pluto/Pluto%201.5.mrpack',
+    mockConfig: {
+      version: '1.5',
+      minecraft: '1.21.1',
+      loader: 'neoforge-21.1.257',
+      mrpack_url: 'mock://pluto/pack.mrpack'
     }
   }
 };
@@ -185,10 +197,10 @@ function log(level, message) {
   logBuffer.push(entry);
   if (logBuffer.length > MAX_LOG_BUFFER) logBuffer.shift();
 
-  // Write to file
+  // Write to file asynchronously to avoid blocking main thread
   try {
     const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
-    fs.appendFileSync(logFilePath, logLine, 'utf8');
+    fs.appendFile(logFilePath, logLine, 'utf8', () => {});
   } catch (e) { /* ignore file errors */ }
 
   // Send to console window if open
@@ -944,31 +956,6 @@ ipcMain.handle('install-java', async (event, requiredVersion) => {
   return { success: true, javaPath: newJavaPath };
 });
 
-// Open Console Window IPC
-ipcMain.on('open-console-window', () => {
-  if (consoleWindow) {
-    consoleWindow.focus();
-    return;
-  }
-
-  consoleWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    backgroundColor: '#0a0a0c',
-    webPreferences: {
-      preload: path.join(__dirname, 'preload-console.js'),
-      nodeIntegration: false,
-      contextIsolation: true
-    },
-    autoHideMenuBar: true
-  });
-
-  consoleWindow.loadFile('console.html');
-
-  consoleWindow.on('closed', () => {
-    consoleWindow = null;
-  });
-});
 
 // Window Control IPCs
 

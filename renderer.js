@@ -20,6 +20,13 @@ const packDetails = {
     mcVersion: '1.20.1',
     loader: 'Fabric-0.15.11',
     serverIp: '185.206.149.27:25601'
+  },
+  pluto: {
+    title: 'Pluto',
+    description: 'A Vanilla+ adventure powered by Create engineering, ultra-realistic world generation, and deep space elements. Construct automated factories, forge contraptions, and explore celestial frontiers.',
+    mcVersion: '1.21.1',
+    loader: 'NeoForge-21.1.257',
+    serverIp: '185.206.149.27:25601'
   }
 };
 
@@ -209,16 +216,136 @@ let seagulls = [];
 let nwGears = [];
 let nwAirships = [];
 let nwEmbers = [];
+let plutoStardust = [];
+let plutoShootingStars = [];
+let plutoGears = [];
+let plutoTime = 0;
+
+let plutoCachedW = 0;
+let plutoCachedH = 0;
+let plutoMountainPoints = [];
+let plutoSnowCapPoints = [];
+let plutoRidgePoints = [];
+
+function updatePlutoCache(W, H, horizonY, groundY) {
+  if (plutoCachedW === W && plutoCachedH === H) return;
+  plutoCachedW = W;
+  plutoCachedH = H;
+  plutoMountainPoints = [];
+  plutoSnowCapPoints = [];
+  for (let x = 0; x <= W; x += 20) {
+    const peak = Math.sin(x * 0.004 + 0.3) * 110 + Math.cos(x * 0.009) * 45;
+    const my = horizonY - 30 - Math.abs(peak);
+    plutoMountainPoints.push({ x, my });
+  }
+  for (let x = 0; x <= W; x += 60) {
+    const peak = Math.sin(x * 0.004 + 0.3) * 110 + Math.cos(x * 0.009) * 45;
+    const my = horizonY - 30 - Math.abs(peak);
+    if (my < horizonY - 90) {
+      plutoSnowCapPoints.push({ x, my });
+    }
+  }
+  plutoRidgePoints = [];
+  for (let x = 0; x <= W; x += 25) {
+    const my = groundY - 50 - Math.abs(Math.sin(x * 0.005 + 1.1)) * 60;
+    plutoRidgePoints.push({ x, my });
+  }
+}
 
 // Canvas Resize Handler
 function resizeCanvas() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
+  plutoCachedW = 0;
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 // Animation classes
+class PlutoStardust {
+  constructor() {
+    this.reset(true);
+  }
+  reset(initial = false) {
+    this.x = Math.random() * (canvas.width || 1050);
+    this.y = initial ? Math.random() * (canvas.height || 700) : (canvas.height || 700) + 10;
+    this.size = Math.random() * 2.5 + 0.8;
+    this.speedY = Math.random() * 0.4 + 0.15;
+    this.speedX = (Math.random() - 0.5) * 0.25;
+    this.alpha = Math.random() * 0.7 + 0.2;
+    this.pulseSpeed = Math.random() * 0.03 + 0.01;
+    this.pulse = Math.random() * Math.PI * 2;
+    this.color = Math.random() > 0.4 ? 'rgba(192, 132, 252, ' : (Math.random() > 0.5 ? 'rgba(56, 189, 248, ' : 'rgba(255, 255, 255, ');
+  }
+  update() {
+    this.y -= this.speedY;
+    this.x += this.speedX;
+    this.pulse += this.pulseSpeed;
+    if (this.y < -10 || this.x < -10 || this.x > canvas.width + 10) {
+      this.reset();
+    }
+  }
+  draw() {
+    const curAlpha = Math.max(0.05, Math.min(1, this.alpha + Math.sin(this.pulse) * 0.25));
+    ctx.fillStyle = this.color + curAlpha + ')';
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class PlutoShootingStar {
+  constructor() {
+    this.reset();
+    this.active = false;
+    this.timer = Math.random() * 300 + 100;
+  }
+  reset() {
+    this.x = Math.random() * (canvas.width * 0.7);
+    this.y = Math.random() * (canvas.height * 0.3);
+    this.length = Math.random() * 90 + 40;
+    this.speed = Math.random() * 7 + 9;
+    this.angle = Math.PI / 4 + (Math.random() - 0.5) * 0.2;
+    this.life = 0;
+    this.maxLife = Math.random() * 25 + 20;
+    this.active = true;
+  }
+  update() {
+    if (!this.active) {
+      this.timer--;
+      if (this.timer <= 0) {
+        this.reset();
+      }
+      return;
+    }
+    this.x += Math.cos(this.angle) * this.speed;
+    this.y += Math.sin(this.angle) * this.speed;
+    this.life++;
+    if (this.life >= this.maxLife || this.x > canvas.width || this.y > canvas.height) {
+      this.active = false;
+      this.timer = Math.random() * 400 + 200;
+    }
+  }
+  draw() {
+    if (!this.active) return;
+    const progress = this.life / this.maxLife;
+    const alpha = (1 - progress) * 0.8;
+    const tailX = this.x - Math.cos(this.angle) * this.length;
+    const tailY = this.y - Math.sin(this.angle) * this.length;
+    
+    const grad = ctx.createLinearGradient(tailX, tailY, this.x, this.y);
+    grad.addColorStop(0, 'rgba(192, 132, 252, 0)');
+    grad.addColorStop(0.6, 'rgba(56, 189, 248, ' + (alpha * 0.6) + ')');
+    grad.addColorStop(1, 'rgba(255, 255, 255, ' + alpha + ')');
+
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY);
+    ctx.lineTo(this.x, this.y);
+    ctx.stroke();
+  }
+}
 class NWGear {
   constructor(x, y, radius, teeth, speed, isLarge = false) {
     this.x = x;
@@ -874,14 +1001,29 @@ function initParticles() {
   for (let i = 0; i < 35; i++) {
     nwEmbers.push(new NWEmber());
   }
+
+  // Stardust, Shooting Stars & Gears (Pluto)
+  plutoStardust = [];
+  plutoShootingStars = [];
+  plutoGears = [];
+  for (let i = 0; i < 45; i++) {
+    plutoStardust.push(new PlutoStardust());
+  }
+  for (let i = 0; i < 3; i++) {
+    plutoShootingStars.push(new PlutoShootingStar());
+  }
+  plutoGears.push(new NWGear(130, 170, 48, 8, 0.003, true));
+  plutoGears.push(new NWGear(195, 205, 32, 6, -0.0045, false));
+  plutoGears.push(new NWGear(canvas.width - 160, canvas.height - 160, 65, 10, 0.002, true));
+  plutoGears.push(new NWGear(canvas.width - 240, canvas.height - 130, 40, 8, -0.003, false));
 }
 
 // Background Animation Loop
 function animate() {
   requestAnimationFrame(animate);
   
-  // Pause rendering to save CPU/GPU when the game is running
-  if (launcherState === 'playing') return;
+  // Pause rendering to save CPU/GPU when the game is running or window is minimized/hidden
+  if (launcherState === 'playing' || document.hidden) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -891,6 +1033,8 @@ function animate() {
     drawPokemonScene();
   } else if (activeTheme === 'theme-new-world') {
     drawNewWorldScene();
+  } else if (activeTheme === 'theme-pluto') {
+    drawPlutoScene();
   }
 }
 
@@ -1272,6 +1416,273 @@ function drawNewWorldScene() {
   nwEmbers.forEach(e => { e.update(); e.draw(); });
 }
 
+// ============ PLUTO — REALISTIC MINECRAFT WORLDGEN + CREATE + SPACE ============
+function drawPlutoScene() {
+  plutoTime += 0.01;
+  const W = canvas.width;
+  const H = canvas.height;
+  const horizonY = H * 0.58;
+  const groundY = H * 0.72;
+
+  // === 1. COSMIC SKY WITH DEEP SPACE NEBULA ===
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY + 30);
+  skyGrad.addColorStop(0, '#060411');
+  skyGrad.addColorStop(0.35, '#0e0824');
+  skyGrad.addColorStop(0.7, '#1b1038');
+  skyGrad.addColorStop(1, '#0c223a');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, horizonY + 35);
+
+  // Soft purple nebula dust
+  const nebGrad1 = ctx.createRadialGradient(W * 0.25, H * 0.2, 20, W * 0.25, H * 0.2, W * 0.4);
+  nebGrad1.addColorStop(0, 'rgba(168, 85, 247, 0.18)');
+  nebGrad1.addColorStop(0.5, 'rgba(147, 51, 234, 0.08)');
+  nebGrad1.addColorStop(1, 'transparent');
+  ctx.fillStyle = nebGrad1;
+  ctx.fillRect(0, 0, W, horizonY);
+
+  // Cyan cosmic haze
+  const nebGrad2 = ctx.createRadialGradient(W * 0.75, H * 0.15, 10, W * 0.75, H * 0.15, W * 0.35);
+  nebGrad2.addColorStop(0, 'rgba(56, 189, 248, 0.14)');
+  nebGrad2.addColorStop(0.6, 'rgba(14, 165, 233, 0.05)');
+  nebGrad2.addColorStop(1, 'transparent');
+  ctx.fillStyle = nebGrad2;
+  ctx.fillRect(0, 0, W, horizonY);
+
+  // Distant stars field with twinkle
+  for (let i = 0; i < 70; i++) {
+    const sx = (i * 139.7 + 37) % W;
+    const sy = (i * 83.3 + 19) % (horizonY * 0.85);
+    const sz = (i % 3 === 0) ? 2 : 1.2;
+    const alpha = 0.25 + 0.55 * Math.abs(Math.sin(plutoTime * 2 + i * 0.7));
+    ctx.fillStyle = (i % 4 === 0) ? `rgba(192, 132, 252, ${alpha})` : ((i % 5 === 0) ? `rgba(56, 189, 248, ${alpha})` : `rgba(255, 255, 255, ${alpha})`);
+    ctx.fillRect(sx, sy, sz, sz);
+  }
+
+  // === 2. GIANT CELESTIAL SQUARE PLANET (PLUTO) ===
+  const planetX = W * 0.72;
+  const planetY = H * 0.22;
+  const planetSize = 88;
+  const halfSize = planetSize / 2;
+
+  // Planet outer atmospheric square glow
+  const glowGrad = ctx.createRadialGradient(planetX, planetY, halfSize * 0.5, planetX, planetY, halfSize * 2.5);
+  glowGrad.addColorStop(0, 'rgba(192, 132, 252, 0.35)');
+  glowGrad.addColorStop(0.45, 'rgba(56, 189, 248, 0.14)');
+  glowGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(planetX - halfSize * 2, planetY - halfSize * 2, planetSize * 2, planetSize * 2);
+
+  // --- BACK RINGS (Tilted band drawn BEHIND the square planet) ---
+  ctx.save();
+  ctx.translate(planetX, planetY);
+  ctx.rotate(-0.36);
+  // Outer back ring
+  ctx.beginPath();
+  ctx.ellipse(0, 0, halfSize * 2.5, halfSize * 0.52, 0, Math.PI, Math.PI * 2);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(192, 132, 252, 0.45)';
+  ctx.stroke();
+  // Main back ring
+  ctx.beginPath();
+  ctx.ellipse(0, 0, halfSize * 2.1, halfSize * 0.44, 0, Math.PI, Math.PI * 2);
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.35)';
+  ctx.stroke();
+  ctx.restore();
+
+  // --- SQUARE PLANET BODY (Minecraft Blocky Celestial Cube) ---
+  // Base Ice Gradient (Starlight illuminated top-left to shadow bottom-right)
+  const pGrad = ctx.createLinearGradient(planetX - halfSize, planetY - halfSize, planetX + halfSize, planetY + halfSize);
+  pGrad.addColorStop(0, '#f8fafc');   // Bright nitrogen ice
+  pGrad.addColorStop(0.3, '#cbd5e1'); // Pale glacier
+  pGrad.addColorStop(0.65, '#475569'); // Shaded slate
+  pGrad.addColorStop(1, '#0f172a');   // Cosmic deep night
+  ctx.fillStyle = pGrad;
+  ctx.fillRect(planetX - halfSize, planetY - halfSize, planetSize, planetSize);
+
+  // Minecraft-style square border highlight & shadow bevel
+  ctx.strokeStyle = 'rgba(241, 245, 249, 0.7)';
+  ctx.lineWidth = 2;
+  // Top and Left illuminated rim
+  ctx.beginPath();
+  ctx.moveTo(planetX - halfSize, planetY + halfSize);
+  ctx.lineTo(planetX - halfSize, planetY - halfSize);
+  ctx.lineTo(planetX + halfSize, planetY - halfSize);
+  ctx.stroke();
+  // Bottom and Right shadow rim
+  ctx.strokeStyle = 'rgba(15, 23, 42, 0.9)';
+  ctx.beginPath();
+  ctx.moveTo(planetX + halfSize, planetY - halfSize);
+  ctx.lineTo(planetX + halfSize, planetY + halfSize);
+  ctx.lineTo(planetX - halfSize, planetY + halfSize);
+  ctx.stroke();
+
+  // Pixelated Terrain: Pluto's "Tombaugh Regio" (Heart of nitrogen ice)
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+  ctx.fillRect(planetX - 28, planetY - 18, 20, 22);
+  ctx.fillRect(planetX - 12, planetY - 10, 18, 26);
+  ctx.fillRect(planetX - 22, planetY + 4, 16, 14);
+  ctx.fillStyle = 'rgba(192, 132, 252, 0.4)';
+  ctx.fillRect(planetX - 16, planetY - 4, 12, 16);
+
+  // Pixelated Terrain: Dark craters & rift valleys (Cthulhu Macula)
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.55)';
+  ctx.fillRect(planetX + 10, planetY + 8, 18, 14);
+  ctx.fillRect(planetX + 16, planetY - 22, 14, 16);
+  ctx.fillRect(planetX - 4, planetY + 20, 20, 12);
+  ctx.fillRect(planetX + 4, planetY - 14, 10, 10);
+
+  // Diagonal stepped terminator shadow (blocky day/night divide)
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.35)';
+  for (let step = 0; step < 4; step++) {
+    const stX = planetX - 10 + step * 12;
+    const stY = planetY - halfSize + step * 22;
+    ctx.fillRect(stX, stY, halfSize + (planetX - stX), 22);
+  }
+
+  // --- FRONT RINGS (Tilted band looping OVER the front of the square planet) ---
+  ctx.save();
+  ctx.translate(planetX, planetY);
+  ctx.rotate(-0.36);
+  // Main front ring
+  ctx.beginPath();
+  ctx.ellipse(0, 0, halfSize * 2.1, halfSize * 0.44, 0, 0, Math.PI);
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = 'rgba(226, 232, 240, 0.38)';
+  ctx.stroke();
+  // Outer front ring
+  ctx.beginPath();
+  ctx.ellipse(0, 0, halfSize * 2.5, halfSize * 0.52, 0, 0, Math.PI);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(192, 132, 252, 0.5)';
+  ctx.stroke();
+  ctx.restore();
+
+  // === 3. SHOOTING STARS ===
+  plutoShootingStars.forEach(s => { s.update(); s.draw(); });
+
+  updatePlutoCache(W, H, horizonY, groundY);
+
+  // === 4. REALISTIC MINECRAFT MOUNTAINS (Back Layer - Snowy Jagged Peaks) ===
+  ctx.fillStyle = '#1e1b4b'; // Deep twilight mountain silhouette
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let i = 0; i < plutoMountainPoints.length; i++) {
+    ctx.lineTo(plutoMountainPoints[i].x, plutoMountainPoints[i].my);
+  }
+  ctx.lineTo(W, H);
+  ctx.fill();
+
+  // Mountain snow caps (blocky realistic stepped peaks)
+  ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
+  for (let i = 0; i < plutoSnowCapPoints.length; i++) {
+    const pt = plutoSnowCapPoints[i];
+    ctx.beginPath();
+    ctx.moveTo(pt.x - 22, pt.my + 30);
+    ctx.lineTo(pt.x, pt.my);
+    ctx.lineTo(pt.x + 22, pt.my + 30);
+    ctx.lineTo(pt.x + 10, pt.my + 25);
+    ctx.lineTo(pt.x, pt.my + 28);
+    ctx.lineTo(pt.x - 10, pt.my + 22);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // === 5. MID-LAYER RIDGE & PINE FORESTS ===
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let i = 0; i < plutoRidgePoints.length; i++) {
+    ctx.lineTo(plutoRidgePoints[i].x, plutoRidgePoints[i].my);
+  }
+  ctx.lineTo(W, H);
+  ctx.fill();
+
+  // Distant pine tree silhouettes along ridge
+  ctx.fillStyle = '#090e17';
+  for (let i = 0; i < plutoRidgePoints.length; i++) {
+    const pt = plutoRidgePoints[i];
+    ctx.fillRect(pt.x - 1, pt.my - 14, 3, 14);
+    ctx.beginPath();
+    ctx.moveTo(pt.x - 7, pt.my - 6);
+    ctx.lineTo(pt.x, pt.my - 24);
+    ctx.lineTo(pt.x + 7, pt.my - 6);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // === 6. OBSERVATORY BASE & CREATE MECHANICAL RESEARCH TOWER ===
+  const baseCenter = W * 0.28;
+  const baseY = groundY - 35;
+  // Stone brick foundation
+  ctx.fillStyle = '#334155';
+  ctx.fillRect(baseCenter - 30, baseY - 35, 60, 35);
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(baseCenter - 34, baseY - 38, 68, 6);
+  // Warm lantern / window
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(baseCenter - 14, baseY - 24, 10, 12);
+  ctx.fillRect(baseCenter + 4, baseY - 24, 10, 12);
+  // Observatory Dome
+  ctx.fillStyle = '#d97706'; // Brass dome
+  ctx.beginPath();
+  ctx.arc(baseCenter, baseY - 38, 22, Math.PI, 0);
+  ctx.fill();
+  // Cyan glowing slit
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillRect(baseCenter - 3, baseY - 60, 6, 22);
+  // Brass Telescope pointing to the sky
+  ctx.save();
+  ctx.translate(baseCenter, baseY - 48);
+  ctx.rotate(-0.65);
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(-4, -36, 8, 36);
+  ctx.fillStyle = '#fbbf24';
+  ctx.fillRect(-6, -42, 12, 8);
+  // Cyan lens flare / starlight beam
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+  ctx.beginPath();
+  ctx.arc(0, -42, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Chimney & smoke puffs
+  ctx.fillStyle = '#475569';
+  ctx.fillRect(baseCenter + 35, baseY - 42, 10, 25);
+  const smkTime = Date.now() / 300;
+  ctx.fillStyle = 'rgba(203, 213, 225, 0.25)';
+  for (let p = 0; p < 3; p++) {
+    const spX = baseCenter + 40 + Math.sin(smkTime + p) * 5;
+    const spY = baseY - 45 - p * 16;
+    const spR = 6 + p * 3;
+    ctx.fillRect(spX - spR/2, spY - spR/2, spR, spR);
+  }
+
+  // === 7. FOREGROUND GROUND & TERRAIN ===
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillRect(0, groundY, W, 4);
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(0, groundY + 4, W, 10);
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(0, groundY + 14, W, H - groundY - 14);
+
+  // Spruce Trees
+  drawPixelTree(W * 0.07, groundY);
+  drawPixelTree(W * 0.52, groundY);
+  drawPixelTree(W * 0.85, groundY);
+
+  // === 8. CREATE KINETIC BRASS GEARS ===
+  plutoGears.forEach(g => {
+    if (g.x > W) g.x = W - 160;
+    g.update();
+    g.draw();
+  });
+
+  // === 9. FLOATING COSMIC STARDUST & PARTICLES ===
+  plutoStardust.forEach(s => { s.update(); s.draw(); });
+}
+
 // Change Modpack Theme & View
 function switchModpack(packKey) {
   if (launcherState !== 'ready') return; // block switching while installing/running
@@ -1284,6 +1695,7 @@ function switchModpack(packKey) {
   if (packKey === 'stranded_at_sea') activeTheme = 'theme-stranded';
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
   else if (packKey === 'create_new_world') activeTheme = 'theme-new-world';
+  else if (packKey === 'pluto') activeTheme = 'theme-pluto';
   
   // Re-initialize particles on theme change (clears old ones and respawns them)
   initParticles();
@@ -1350,7 +1762,9 @@ async function checkServerStatus(packKey) {
         const m = motd.toLowerCase();
         
         let serverPack = null;
-        if (m.includes('new world') || m.includes('colonizers') || m.includes('create+') || m.startsWith('2') || m.startsWith('c') || m.startsWith('w')) {
+        if (m.includes('pluto') || m.startsWith('p')) {
+          serverPack = 'pluto';
+        } else if (m.includes('new world') || m.includes('colonizers') || m.includes('create+') || m.startsWith('2') || m.startsWith('c') || m.startsWith('w')) {
           serverPack = 'create_new_world';
         } else if (m.includes('stranded') || m.includes('sea') || m.startsWith('1')) {
           serverPack = 'stranded_at_sea';
@@ -2726,10 +3140,10 @@ async function initApp() {
   // Sort modpacks based on last played initially
   sortModpacks();
 
-  // Load saved pack or default to create_new_world
+  // Load saved pack or default to pluto
   let initialPack = (configSettings && configSettings.selectedPack && packDetails[configSettings.selectedPack]) 
     ? configSettings.selectedPack 
-    : 'create_new_world';
+    : 'pluto';
   switchModpack(initialPack);
 }
 

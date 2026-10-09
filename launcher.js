@@ -625,7 +625,6 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
         vanillaOpts.version = { number: mcVersion, type: 'release' };
         vanillaOpts.customArgs = ['-version']; // Java will immediately exit 0
         
-        const { Client } = require('minecraft-launcher-core');
         const vanillaLauncher = new Client();
         
         // Forward progress events
