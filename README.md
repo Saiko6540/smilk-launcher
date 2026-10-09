@@ -81,13 +81,28 @@ The launcher features multiple custom pixel-art interactive themes that dynamica
 
 ## 📦 Building for Production
 
-To package the application and generate a standalone `.exe` installer for Windows:
-
+### Windows (.exe):
 ```bash
-npm run build
+npm run build:win
 ```
 
-The compiled installer will be available inside the `dist/` directory.
+### Linux (AppImage, RPM, Flatpak, tar.gz):
+```bash
+# Build all Linux targets (AppImage, RPM, Flatpak, tar.gz):
+npm run build:linux
+
+# Build specific package format:
+npm run build:rpm       # Native package for Fedora / RHEL / CentOS
+npm run build:appimage  # Universal standalone executable
+npm run build:flatpak   # Flatpak bundle
+```
+
+### Flatpak Builder (Manual / Flathub):
+```bash
+flatpak-builder --user --install --force-clean build-dir com.smilk.launcher.yml
+```
+
+The compiled installers will be available inside the `dist/` directory.
 
 ---
 

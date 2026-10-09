@@ -1,0 +1,39 @@
+app-id: com.smilk.launcher
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '23.08'
+command: smilk
+finish-args:
+  # 3D Graphics and Windowing
+  - --device=dri
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  # Network for mod downloads and multiplayer
+  - --share=network
+  # Sound
+  - --socket=pulseaudio
+  # Full storage access for Minecraft instances, saves, mods, and portable JRE
+  - --filesystem=host
+  # Discord Rich Presence IPC socket
+  - --filesystem=xdg-run/discord-ipc-0
+  # Notifications
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: smilk
+    buildsystem: simple
+    build-commands:
+      - install -d /app/bin
+      - install -d /app/share/applications
+      - install -d /app/share/icons/hicolor/512x512/apps
+      - install -d /app/share/metainfo
+      - install -m 755 -D smilk /app/bin/smilk
+      - install -m 644 -D icon.png /app/share/icons/hicolor/512x512/apps/com.smilk.launcher.png
+      - install -m 644 -D com.smilk.launcher.desktop /app/share/applications/com.smilk.launcher.desktop
+      - install -m 644 -D com.smilk.launcher.metainfo.xml /app/share/metainfo/com.smilk.launcher.metainfo.xml
+    sources:
+      - type: dir
+        path: .

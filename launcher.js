@@ -540,9 +540,12 @@ function checkJavaVersion(javaPath, mcVersion) {
       }
     } catch(e) {}
     
-    const javaExeForCheck = javaPath.toLowerCase().endsWith('javaw.exe') 
-      ? javaPath.replace(/javaw\.exe$/i, 'java.exe') 
-      : (javaPath === 'javaw' ? 'java' : javaPath);
+    let javaExeForCheck = javaPath;
+    if (process.platform === 'win32') {
+      javaExeForCheck = javaPath.toLowerCase().endsWith('javaw.exe') 
+        ? javaPath.replace(/javaw\.exe$/i, 'java.exe') 
+        : (javaPath === 'javaw' ? 'java' : javaPath);
+    }
 
     exec(`"${javaExeForCheck}" -version`, (error, stdout, stderr) => {
       if (error) {
@@ -594,8 +597,17 @@ async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
       if (entry.isDirectory()) {
         const found = findJava(fullPath);
         if (found) return found;
-      } else if (entry.name.toLowerCase() === 'javaw.exe' || entry.name.toLowerCase() === 'java.exe') {
-        return fullPath;
+      } else {
+        if (process.platform === 'win32') {
+          if (entry.name.toLowerCase() === 'javaw.exe' || entry.name.toLowerCase() === 'java.exe') {
+            return fullPath;
+          }
+        } else {
+          if (entry.name === 'java' && path.basename(dir) === 'bin') {
+            try { fs.chmodSync(fullPath, 0o755); } catch (e) {}
+            return fullPath;
+          }
+        }
       }
     }
     return null;
@@ -609,27 +621,40 @@ async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
   sendProgress({ status: 'installing_java', message: `Downloading compatible Java ${targetVersion}... (this may take a minute)` });
   fs.mkdirSync(javaDir, { recursive: true });
 
-  const zipPath = path.join(userDataPath, 'game_data', 'java', `jre-${targetVersion}.zip`);
-  const downloadUrl = `https://api.adoptium.net/v3/binary/latest/${targetVersion}/ga/windows/x64/jre/hotspot/normal/eclipse`;
+  const isWin = process.platform === 'win32';
+  const osName = isWin ? 'windows' : (process.platform === 'darwin' ? 'mac' : 'linux');
+  const archName = process.arch === 'arm64' ? 'aarch64' : 'x64';
+  const ext = isWin ? 'zip' : 'tar.gz';
+  const archivePath = path.join(userDataPath, 'game_data', 'java', `jre-${targetVersion}.${ext}`);
+  const downloadUrl = `https://api.adoptium.net/v3/binary/latest/${targetVersion}/ga/${osName}/${archName}/jre/hotspot/normal/eclipse`;
   
-  await downloadFile(downloadUrl, zipPath);
+  await downloadFile(downloadUrl, archivePath);
   
   sendProgress({ status: 'installing_java', message: `Extracting Java ${targetVersion}...` });
   
-  const AdmZip = require('adm-zip');
-  const zip = new AdmZip(zipPath);
-  zip.extractAllTo(javaDir, true);
-  
-  try {
-    fs.unlinkSync(zipPath);
-  } catch (e) {}
-
-  const javaExe = findJava(javaDir);
-  if (javaExe) {
-    return javaExe;
+  if (isWin) {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(archivePath);
+    zip.extractAllTo(javaDir, true);
+  } else {
+    const { execSync } = require('child_process');
+    try {
+      execSync(`tar -xzf "${archivePath}" -C "${javaDir}"`);
+    } catch (err) {
+      throw new Error(`Failed to extract Java on Linux: ${err.message}`);
+    }
   }
   
-  throw new Error(`Failed to locate java.exe after extracting Java ${targetVersion}.`);
+  try {
+    fs.unlinkSync(archivePath);
+  } catch (e) {}
+
+  const javaBin = findJava(javaDir);
+  if (javaBin) {
+    return javaBin;
+  }
+  
+  throw new Error(`Failed to locate java executable after extracting Java ${targetVersion}.`);
 }
 
 /**

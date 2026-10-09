@@ -989,7 +989,6 @@ ipcMain.handle('repair-profile', async (event, packKey) => {
 
 // Install Java IPC
 ipcMain.handle('install-java', async (event, requiredVersion) => {
-  const AdmZip = require('adm-zip');
   const https = require('https');
 
   const javaDir = path.join(userDataPath, 'game_data', 'java', `jre-${requiredVersion}`);
@@ -998,10 +997,14 @@ ipcMain.handle('install-java', async (event, requiredVersion) => {
   }
   fs.mkdirSync(javaDir, { recursive: true });
 
-  const zipPath = path.join(userDataPath, 'game_data', 'java', `jre-${requiredVersion}.zip`);
-  const apiUrl = `https://api.adoptium.net/v3/binary/latest/${requiredVersion}/ga/windows/x64/jre/hotspot/normal/eclipse?project=jdk`;
+  const isWin = process.platform === 'win32';
+  const osName = isWin ? 'windows' : (process.platform === 'darwin' ? 'mac' : 'linux');
+  const archName = process.arch === 'arm64' ? 'aarch64' : 'x64';
+  const ext = isWin ? 'zip' : 'tar.gz';
+  const archivePath = path.join(userDataPath, 'game_data', 'java', `jre-${requiredVersion}.${ext}`);
+  const apiUrl = `https://api.adoptium.net/v3/binary/latest/${requiredVersion}/ga/${osName}/${archName}/jre/hotspot/normal/eclipse?project=jdk`;
 
-  // Download ZIP with redirect support
+  // Download with redirect support
   function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {
       https.get(url, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
@@ -1019,31 +1022,50 @@ ipcMain.handle('install-java', async (event, requiredVersion) => {
     });
   }
 
-  await downloadFile(apiUrl, zipPath);
+  await downloadFile(apiUrl, archivePath);
 
-  // Extract ZIP
-  const zip = new AdmZip(zipPath);
-  zip.extractAllTo(javaDir, true);
+  // Extract
+  if (isWin) {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(archivePath);
+    zip.extractAllTo(javaDir, true);
+  } else {
+    const { execSync } = require('child_process');
+    try {
+      execSync(`tar -xzf "${archivePath}" -C "${javaDir}"`);
+    } catch (err) {
+      throw new Error(`Failed to extract Java archive on Linux: ${err.message}`);
+    }
+  }
   try {
-    fs.unlinkSync(zipPath); // Delete zip
+    fs.unlinkSync(archivePath);
   } catch (e) {}
 
-  // Find javaw.exe / java.exe
-  function findJavaw(dir) {
+  // Find java executable
+  function findJava(dir) {
     if (!fs.existsSync(dir)) return null;
     const files = fs.readdirSync(dir);
     for (const f of files) {
       const fullPath = path.join(dir, f);
       if (fs.statSync(fullPath).isDirectory()) {
-        const found = findJavaw(fullPath);
+        const found = findJava(fullPath);
         if (found) return found;
-      } else if (f.toLowerCase() === 'javaw.exe' || f.toLowerCase() === 'java.exe') {
-        return fullPath;
+      } else {
+        if (isWin) {
+          if (f.toLowerCase() === 'javaw.exe' || f.toLowerCase() === 'java.exe') {
+            return fullPath;
+          }
+        } else {
+          if (f === 'java' && path.basename(dir) === 'bin') {
+            try { fs.chmodSync(fullPath, 0o755); } catch (e) {}
+            return fullPath;
+          }
+        }
       }
     }
     return null;
   }
-  const newJavaPath = findJavaw(javaDir);
+  const newJavaPath = findJava(javaDir);
 
   if (!newJavaPath) {
     throw new Error("Downloaded Java but couldn't find java executable inside!");

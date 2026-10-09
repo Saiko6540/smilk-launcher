@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=smilk
+Comment=Custom Minecraft Launcher with dynamic animated themes
+Exec=smilk %U
+Icon=com.smilk.launcher
+Type=Application
+Terminal=false
+Categories=Game;ActionGame;AdventureGame;
+StartupWMClass=smilk
+Keywords=game;minecraft;launcher;smilk;

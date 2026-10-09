@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.smilk.launcher</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>smilk</name>
+  <summary>Custom Minecraft Launcher with dynamic animated themes</summary>
+  <description>
+    <p>smilk is a custom Minecraft launcher featuring dynamic animated themes, modpack management, instant shader toggling, and shared asset indexing.</p>
+  </description>
+  <launchable type="desktop-id">com.smilk.launcher.desktop</launchable>
+  <provides>
+    <binary>smilk</binary>
+  </provides>
+  <developer_name>saiko</developer_name>
+</component>

@@ -5,7 +5,13 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win --x64"
+    "build": "electron-builder --win --x64",
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux",
+    "build:rpm": "electron-builder --linux rpm",
+    "build:appimage": "electron-builder --linux AppImage",
+    "build:flatpak": "electron-builder --linux flatpak",
+    "build:all": "electron-builder -wl"
   },
   "build": {
     "npmRebuild": false,
@@ -17,6 +23,58 @@
     "win": {
       "target": "nsis",
       "artifactName": "smilk-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "rpm",
+        "flatpak",
+        "tar.gz"
+      ],
+      "icon": "icon.png",
+      "category": "Game",
+      "maintainer": "saiko",
+      "vendor": "smilk",
+      "executableName": "smilk",
+      "artifactName": "smilk-${version}.${ext}",
+      "synopsis": "Custom Minecraft Launcher with dynamic animated themes",
+      "description": "Custom Minecraft Launcher with dynamic animated themes",
+      "desktop": {
+        "Name": "smilk",
+        "Comment": "Custom Minecraft Launcher with dynamic animated themes",
+        "Keywords": "game;minecraft;launcher;smilk;",
+        "Categories": "Game;ActionGame;AdventureGame;"
+      }
+    },
+    "rpm": {
+      "packageName": "smilk",
+      "artifactName": "smilk-${version}.${arch}.rpm",
+      "category": "Amusements/Games",
+      "license": "MIT",
+      "synopsis": "Custom Minecraft Launcher"
+    },
+    "flatpak": {
+      "branch": "stable",
+      "runtime": "org.freedesktop.Platform",
+      "runtimeVersion": "23.08",
+      "sdk": "org.freedesktop.Sdk",
+      "base": "org.electronjs.Electron2.BaseApp",
+      "baseVersion": "23.08",
+      "artifactName": "smilk-${version}.${arch}.flatpak",
+      "finishArgs": [
+        "--share=ipc",
+        "--socket=x11",
+        "--socket=wayland",
+        "--socket=pulseaudio",
+        "--share=network",
+        "--device=dri",
+        "--filesystem=host",
+        "--filesystem=xdg-run/discord-ipc-0",
+        "--talk-name=org.freedesktop.Notifications"
+      ]
+    },
+    "appImage": {
+      "artifactName": "smilk-${version}.${ext}"
     },
     "publish": [
       {
