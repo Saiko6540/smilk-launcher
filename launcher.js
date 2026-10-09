@@ -1,16 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const http = require('http');
 const { spawn, exec } = require('child_process');
 const { Client, Authenticator } = require('minecraft-launcher-core');
+const { getFileSha1 } = require('./mod-helper');
 
 /**
- * Helper to download a file (used for loader downloading)
- */
-const http = require('http');
-
-/**
- * Helper to download a file (used for loader and java downloading)
+ * Helper to download a file with redirect support
  */
 function downloadFile(url, destPath, options = {}) {
   return new Promise((resolve, reject) => {
@@ -105,9 +102,12 @@ function downloadFile(url, destPath, options = {}) {
 function fetchText(url, headers = {}) {
   return new Promise((resolve, reject) => {
     const opts = {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', ...headers }
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) smilk-launcher', ...headers }
     };
     https.get(url, opts, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return fetchText(res.headers.location, headers).then(resolve).catch(reject);
+      }
       if (res.statusCode !== 200) {
         reject(new Error(`Failed to fetch text: Status Code ${res.statusCode}`));
         return;
@@ -152,14 +152,182 @@ function runCommand(cmd, args, options = {}) {
 }
 
 /**
- * Installs OptiFine standalone version profile JSON and libraries
+ * Resolves shared game data directories (game_data/assets, game_data/libraries, game_data/versions)
  */
-async function installOptiFine(mcVersion, instanceDir, sendProgress) {
+function getSharedGameData(instanceDir) {
+  const sharedRoot = path.resolve(instanceDir, '../..'); // %APPDATA%/smilk-launcher/game_data
+  return {
+    root: sharedRoot,
+    assets: path.join(sharedRoot, 'assets'),
+    libraries: path.join(sharedRoot, 'libraries'),
+    versions: path.join(sharedRoot, 'versions')
+  };
+}
+
+/**
+ * Recursively copies a directory
+ */
+function copyDirRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  fs.mkdirSync(dest, { recursive: true });
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      if (!fs.existsSync(destPath)) {
+        try {
+          fs.copyFileSync(srcPath, destPath);
+        } catch (e) {}
+      }
+    }
+  }
+}
+
+/**
+ * Migrates legacy instance-specific assets, libraries, and versions into shared directories
+ */
+function migrateLegacyInstanceFiles(instanceDir, shared) {
+  const legacyAssets = path.join(instanceDir, 'assets');
+  if (fs.existsSync(legacyAssets)) {
+    try {
+      copyDirRecursive(legacyAssets, shared.assets);
+      console.log(`Migrated legacy assets from ${instanceDir} to shared ${shared.assets}`);
+      try { fs.rmSync(legacyAssets, { recursive: true, force: true }); } catch (e) {}
+    } catch (e) {
+      console.warn('Failed migrating legacy assets:', e.message);
+    }
+  }
+
+  const legacyLibs = path.join(instanceDir, 'libraries');
+  if (fs.existsSync(legacyLibs)) {
+    try {
+      copyDirRecursive(legacyLibs, shared.libraries);
+      console.log(`Migrated legacy libraries from ${instanceDir} to shared ${shared.libraries}`);
+      try { fs.rmSync(legacyLibs, { recursive: true, force: true }); } catch (e) {}
+    } catch (e) {
+      console.warn('Failed migrating legacy libraries:', e.message);
+    }
+  }
+
+  const legacyVersions = path.join(instanceDir, 'versions');
+  if (fs.existsSync(legacyVersions)) {
+    try {
+      copyDirRecursive(legacyVersions, shared.versions);
+      console.log(`Migrated legacy versions from ${instanceDir} to shared ${shared.versions}`);
+      try { fs.rmSync(legacyVersions, { recursive: true, force: true }); } catch (e) {}
+    } catch (e) {
+      console.warn('Failed migrating legacy versions:', e.message);
+    }
+  }
+}
+
+/**
+ * Resolves the canonical Mojang assetIndex (e.g. "17" for Minecraft 1.21.1) following inheritsFrom,
+ * downloads assets/indexes/<id>.json, and creates compatibility aliases (<mcVersion>.json, <loader>.json).
+ */
+async function resolveAndPrepareAssetIndex(shared, customVersionId, mcVersion, sendProgress) {
+  fs.mkdirSync(path.join(shared.assets, 'indexes'), { recursive: true });
+  fs.mkdirSync(path.join(shared.versions, mcVersion), { recursive: true });
+
+  let vanillaJson = null;
+  const vanillaJsonPath = path.join(shared.versions, mcVersion, `${mcVersion}.json`);
+
+  // 1. Try reading vanilla JSON if exists
+  if (fs.existsSync(vanillaJsonPath)) {
+    try {
+      vanillaJson = JSON.parse(fs.readFileSync(vanillaJsonPath, 'utf8'));
+    } catch (e) {}
+  }
+
+  // 2. If vanilla JSON missing or incomplete, fetch from Mojang version manifest
+  if (!vanillaJson || !vanillaJson.assetIndex) {
+    if (sendProgress) sendProgress({ status: 'downloading_assets', message: `Fetching version manifest for Minecraft ${mcVersion}...` });
+    try {
+      const manifestText = await fetchText('https://piston-meta.mojang.com/mc/game/version_manifest_v2.json');
+      const manifest = JSON.parse(manifestText);
+      const versionEntry = manifest.versions.find(v => v.id === mcVersion);
+      if (versionEntry && versionEntry.url) {
+        const vText = await fetchText(versionEntry.url);
+        vanillaJson = JSON.parse(vText);
+        fs.writeFileSync(vanillaJsonPath, vText, 'utf8');
+        console.log(`Saved vanilla version JSON for ${mcVersion} to ${vanillaJsonPath}`);
+
+        // Also download client.jar if missing
+        const vanillaJarPath = path.join(shared.versions, mcVersion, `${mcVersion}.jar`);
+        if (!fs.existsSync(vanillaJarPath) && vanillaJson.downloads && vanillaJson.downloads.client && vanillaJson.downloads.client.url) {
+          if (sendProgress) sendProgress({ status: 'downloading_assets', message: `Downloading Minecraft ${mcVersion} base client...` });
+          await downloadFile(vanillaJson.downloads.client.url, vanillaJarPath);
+          console.log(`Downloaded vanilla client jar to ${vanillaJarPath}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`Failed fetching Mojang manifest for ${mcVersion}:`, err.message);
+    }
+  }
+
+  // Fallback: Check custom loader JSON for inheritsFrom chain
+  if ((!vanillaJson || !vanillaJson.assetIndex) && customVersionId) {
+    const customJsonPath = path.join(shared.versions, customVersionId, `${customVersionId}.json`);
+    if (fs.existsSync(customJsonPath)) {
+      try {
+        const customJson = JSON.parse(fs.readFileSync(customJsonPath, 'utf8'));
+        if (customJson.assetIndex) {
+          vanillaJson = customJson;
+        }
+      } catch (e) {}
+    }
+  }
+
+  const assetIndexInfo = (vanillaJson && vanillaJson.assetIndex) ? vanillaJson.assetIndex : { id: mcVersion };
+  const assetIndexId = String(assetIndexInfo.id || mcVersion);
+  const targetIndexFile = path.join(shared.assets, 'indexes', `${assetIndexId}.json`);
+
+  // Download the canonical asset index if missing or empty
+  if (!fs.existsSync(targetIndexFile) || fs.statSync(targetIndexFile).size < 100) {
+    if (assetIndexInfo.url) {
+      if (sendProgress) sendProgress({ status: 'downloading_assets', message: `Downloading assets index (${assetIndexId})...` });
+      console.log(`Downloading canonical asset index ${assetIndexId} from ${assetIndexInfo.url}`);
+      await downloadFile(assetIndexInfo.url, targetIndexFile);
+    }
+  }
+
+  // Create compatibility aliases in shared.assets/indexes:
+  // e.g. 17.json -> 1.21.1.json and neoforge-21.1.257.json so any legacy references work seamlessly
+  if (fs.existsSync(targetIndexFile)) {
+    const aliases = [mcVersion];
+    if (customVersionId && customVersionId !== assetIndexId && customVersionId !== mcVersion) {
+      aliases.push(customVersionId);
+    }
+    for (const alias of aliases) {
+      const aliasPath = path.join(shared.assets, 'indexes', `${alias}.json`);
+      if (!fs.existsSync(aliasPath) || fs.statSync(aliasPath).size !== fs.statSync(targetIndexFile).size) {
+        try {
+          fs.copyFileSync(targetIndexFile, aliasPath);
+          console.log(`Created asset index alias: ${alias}.json -> ${assetIndexId}.json`);
+        } catch (e) {}
+      }
+    }
+  }
+
+  return {
+    assetIndexId,
+    assetIndexInfo,
+    vanillaJson
+  };
+}
+
+/**
+ * Installs OptiFine standalone version profile JSON and libraries in shared storage
+ */
+async function installOptiFine(mcVersion, shared, sendProgress) {
   const optifineVer = mcVersion === '1.9.4' ? '1.9.4_HD_U_I5' : (mcVersion === '1.9' ? '1.9_HD_U_I5' : `${mcVersion}_HD_U_I5`);
   const customVersionId = `${mcVersion}-OptiFine_${optifineVer}`;
-  const versionDir = path.join(instanceDir, 'versions', customVersionId);
+  const versionDir = path.join(shared.versions, customVersionId);
   const jsonPath = path.join(versionDir, `${customVersionId}.json`);
-  const optifineLibDir = path.join(instanceDir, 'libraries', 'optifine', 'OptiFine', optifineVer);
+  const optifineLibDir = path.join(shared.libraries, 'optifine', 'OptiFine', optifineVer);
   const optifineJarPath = path.join(optifineLibDir, `OptiFine-${optifineVer}.jar`);
 
   if (!fs.existsSync(jsonPath) || !fs.existsSync(optifineJarPath)) {
@@ -167,7 +335,6 @@ async function installOptiFine(mcVersion, instanceDir, sendProgress) {
     fs.mkdirSync(versionDir, { recursive: true });
     fs.mkdirSync(optifineLibDir, { recursive: true });
 
-    // Download OptiFine jar from optifine.net
     const adUrl = `https://optifine.net/adloadx?f=OptiFine_${optifineVer}.jar`;
     const html = await fetchText(adUrl);
     const match = html.match(/href='(downloadx\?[^']+)'/);
@@ -177,10 +344,9 @@ async function installOptiFine(mcVersion, instanceDir, sendProgress) {
     const dlUrl = 'https://optifine.net/' + match[1];
     await downloadFile(dlUrl, optifineJarPath);
 
-    // Extract launchwrapper-of-2.2.jar from OptiFine jar into libraries/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar
     try {
       const AdmZip = require('adm-zip');
-      const lwDestDir = path.join(instanceDir, 'libraries', 'net', 'minecraft', 'launchwrapper', '1.12');
+      const lwDestDir = path.join(shared.libraries, 'net', 'minecraft', 'launchwrapper', '1.12');
       const lwDestPath = path.join(lwDestDir, 'launchwrapper-1.12.jar');
       fs.mkdirSync(lwDestDir, { recursive: true });
 
@@ -194,7 +360,6 @@ async function installOptiFine(mcVersion, instanceDir, sendProgress) {
       console.warn('Failed to extract LaunchWrapper from OptiFine jar:', e);
     }
 
-    // Generate custom version JSON
     const profileJson = {
       id: customVersionId,
       inheritsFrom: mcVersion,
@@ -215,11 +380,11 @@ async function installOptiFine(mcVersion, instanceDir, sendProgress) {
 }
 
 /**
- * Installs Fabric loader profile JSON
+ * Installs Fabric loader profile JSON in shared storage
  */
-async function installFabric(mcVersion, loaderVersion, instanceDir) {
+async function installFabric(mcVersion, loaderVersion, shared) {
   const customVersionId = `fabric-loader-${loaderVersion}-${mcVersion}`;
-  const versionDir = path.join(instanceDir, 'versions', customVersionId);
+  const versionDir = path.join(shared.versions, customVersionId);
   const jsonPath = path.join(versionDir, `${customVersionId}.json`);
   const jarPath = path.join(versionDir, `${customVersionId}.jar`);
 
@@ -236,7 +401,6 @@ async function installFabric(mcVersion, loaderVersion, instanceDir) {
   fs.writeFileSync(jsonPath, profileJsonText, 'utf8');
 
   // Create dummy jar to prevent MCLC launcher issues
-  // Must be a valid zip format, otherwise Fabric LibClassifier throws ZipException: zip file is empty
   const emptyZip = Buffer.from([0x50, 0x4B, 0x05, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   fs.writeFileSync(jarPath, emptyZip);
 
@@ -244,37 +408,37 @@ async function installFabric(mcVersion, loaderVersion, instanceDir) {
 }
 
 /**
- * Installs NeoForge by running the official installer JAR headlessly
+ * Installs NeoForge into shared storage by running the official installer headlessly
  */
-async function installNeoForge(mcVersion, neoforgeVersion, instanceDir, javaPath, sendProgress) {
+async function installNeoForge(mcVersion, neoforgeVersion, shared, javaPath, sendProgress) {
   const customVersionId = `neoforge-${neoforgeVersion}`;
-  const versionDir = path.join(instanceDir, 'versions', customVersionId);
+  const versionDir = path.join(shared.versions, customVersionId);
   const jsonPath = path.join(versionDir, `${customVersionId}.json`);
 
   if (fs.existsSync(jsonPath)) {
     return customVersionId;
   }
 
-  // Ensure launcher_profiles.json exists
-  const profilesFile = path.join(instanceDir, 'launcher_profiles.json');
+  // Ensure launcher_profiles.json exists in shared root
+  const profilesFile = path.join(shared.root, 'launcher_profiles.json');
   if (!fs.existsSync(profilesFile)) {
     fs.writeFileSync(profilesFile, JSON.stringify({ profiles: {} }, null, 2), 'utf8');
   }
 
-  // Download neoforge installer
-  const installerPath = path.join(instanceDir, 'neoforge-installer.jar');
+  // Download neoforge installer to shared root
+  const installerPath = path.join(shared.root, 'neoforge-installer.jar');
   const installerUrl = `https://maven.neoforged.net/releases/net/neoforged/neoforge/${neoforgeVersion}/neoforge-${neoforgeVersion}-installer.jar`;
   
   console.log(`Downloading NeoForge installer from ${installerUrl}`);
   sendProgress({ status: 'installing_loader', message: 'Downloading NeoForge installer...' });
   await downloadFile(installerUrl, installerPath);
 
-  // Run installer command
+  // Run installer command targeting shared.root
   sendProgress({ status: 'installing_loader', message: 'Installing NeoForge (this may take a minute)...' });
   const javaExec = javaPath || 'java';
 
   try {
-    await runCommand(javaExec, ['-jar', installerPath, '--installClient', instanceDir], { cwd: instanceDir });
+    await runCommand(javaExec, ['-jar', installerPath, '--installClient', shared.root], { cwd: shared.root });
   } catch (err) {
     console.error('NeoForge installer execution failed:', err);
     throw new Error(`NeoForge installation failed: Ensure Java is installed and compatible. (${err.message})`);
@@ -282,7 +446,7 @@ async function installNeoForge(mcVersion, neoforgeVersion, instanceDir, javaPath
     // Cleanup installer files
     try {
       if (fs.existsSync(installerPath)) fs.unlinkSync(installerPath);
-      const installerLog = path.join(instanceDir, 'neoforge-installer.jar.log');
+      const installerLog = path.join(shared.root, 'neoforge-installer.jar.log');
       if (fs.existsSync(installerLog)) fs.unlinkSync(installerLog);
     } catch (e) {
       console.warn('Failed to clean up installer files:', e);
@@ -297,47 +461,42 @@ async function installNeoForge(mcVersion, neoforgeVersion, instanceDir, javaPath
 }
 
 /**
- * Installs Forge by running the official installer JAR headlessly
+ * Installs Forge into shared storage by running the official installer headlessly
  */
-async function installForge(mcVersion, forgeVersion, instanceDir, javaPath, sendProgress) {
-  // Forge version directory name format e.g. "1.20.1-forge-47.2.0"
+async function installForge(mcVersion, forgeVersion, shared, javaPath, sendProgress) {
   const customVersionId = `${mcVersion}-forge-${forgeVersion}`;
-  const versionDir = path.join(instanceDir, 'versions', customVersionId);
+  const versionDir = path.join(shared.versions, customVersionId);
   const jsonPath = path.join(versionDir, `${customVersionId}.json`);
 
   if (fs.existsSync(jsonPath)) {
     return customVersionId;
   }
 
-  // Ensure launcher_profiles.json exists
-  const profilesFile = path.join(instanceDir, 'launcher_profiles.json');
+  // Ensure launcher_profiles.json exists in shared root
+  const profilesFile = path.join(shared.root, 'launcher_profiles.json');
   if (!fs.existsSync(profilesFile)) {
     fs.writeFileSync(profilesFile, JSON.stringify({ profiles: {} }, null, 2), 'utf8');
   }
 
-  // Download forge installer
-  const installerPath = path.join(instanceDir, 'forge-installer.jar');
+  const installerPath = path.join(shared.root, 'forge-installer.jar');
   const installerUrl = `https://maven.minecraftforge.net/net/minecraftforge/forge/${mcVersion}-${forgeVersion}/forge-${mcVersion}-${forgeVersion}-installer.jar`;
   
   console.log(`Downloading Forge installer from ${installerUrl}`);
   sendProgress({ status: 'installing_loader', message: 'Downloading Forge installer...' });
   await downloadFile(installerUrl, installerPath);
 
-  // Run installer command
   sendProgress({ status: 'installing_loader', message: 'Installing Forge (this may take a few minutes)...' });
   const javaExec = javaPath || 'java';
 
   try {
-    // --installClient takes the root directory of Minecraft
-    await runCommand(javaExec, ['-jar', installerPath, '--installClient', instanceDir], { cwd: instanceDir });
+    await runCommand(javaExec, ['-jar', installerPath, '--installClient', shared.root], { cwd: shared.root });
   } catch (err) {
     console.error('Forge installer execution failed:', err);
     throw new Error(`Forge installation failed: Ensure Java is installed and compatible. (${err.message})`);
   } finally {
-    // Cleanup installer files
     try {
       if (fs.existsSync(installerPath)) fs.unlinkSync(installerPath);
-      const installerLog = path.join(instanceDir, 'forge-installer.jar.log');
+      const installerLog = path.join(shared.root, 'forge-installer.jar.log');
       if (fs.existsSync(installerLog)) fs.unlinkSync(installerLog);
     } catch (e) {
       console.warn('Failed to clean up installer files:', e);
@@ -418,7 +577,6 @@ function checkJavaVersion(javaPath, mcVersion) {
         
         resolve(major);
       } else {
-        // Could not parse, just resolve to allow launching
         resolve(0);
       }
     });
@@ -443,7 +601,6 @@ async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
     return null;
   }
 
-  // Check if we already have it
   const existingJava = findJava(javaDir);
   if (existingJava) {
     return existingJava;
@@ -453,8 +610,6 @@ async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
   fs.mkdirSync(javaDir, { recursive: true });
 
   const zipPath = path.join(userDataPath, 'game_data', 'java', `jre-${targetVersion}.zip`);
-  
-  // URL for Adoptium Eclipse Temurin JRE (Windows x64)
   const downloadUrl = `https://api.adoptium.net/v3/binary/latest/${targetVersion}/ga/windows/x64/jre/hotspot/normal/eclipse`;
   
   await downloadFile(downloadUrl, zipPath);
@@ -478,17 +633,97 @@ async function ensureJava(userDataPath, sendProgress, targetVersion = 21) {
 }
 
 /**
- * Launches Minecraft using minecraft-launcher-core
+ * Starts background watchdog on logs/latest.log to detect missing asset indexes, duplicate mods, and missing sounds.
  */
-async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, mcVersion, loaderString, sendProgress) {
+function startLogWatchdog(instanceDir, packKey, sendProgress, proc) {
+  const logFile = path.join(instanceDir, 'logs', 'latest.log');
+  const startTime = Date.now();
+  const maxDurationMs = 75000; // Watch for 75 seconds after launch
+  let warned = false;
+
+  const interval = setInterval(() => {
+    if (warned || Date.now() - startTime > maxDurationMs) {
+      clearInterval(interval);
+      return;
+    }
+
+    if (!fs.existsSync(logFile)) return;
+
+    try {
+      const content = fs.readFileSync(logFile, 'utf8');
+
+      // Check 1: Can't open resource index file
+      if (content.includes("Can't open the resource index file")) {
+        warned = true;
+        clearInterval(interval);
+        console.warn('[Log Watchdog] Resource index error detected in latest.log!');
+        sendProgress({
+          status: 'diagnostic_warning',
+          warningType: 'assets_missing',
+          title: 'Missing Game Resources Detected',
+          message: 'The game reported an error reading asset indexes. Vanilla sounds, languages, or menu textures may be missing.',
+          packKey: packKey
+        });
+        return;
+      }
+
+      // Check 2: Found duplicate mods
+      if (content.includes("Found duplicate mods") || content.includes("DuplicateModsFoundException")) {
+        warned = true;
+        clearInterval(interval);
+        console.warn('[Log Watchdog] Duplicate mods detected in latest.log!');
+        sendProgress({
+          status: 'diagnostic_warning',
+          warningType: 'duplicate_mods',
+          title: 'Duplicate Mods Detected',
+          message: 'The game found duplicate mods with identical IDs in your mods folder.',
+          packKey: packKey
+        });
+        return;
+      }
+
+      // Check 3: Missing sound for event (> 10 occurrences)
+      const missingSoundMatches = content.match(/Missing sound for event/g);
+      if (missingSoundMatches && missingSoundMatches.length > 10) {
+        warned = true;
+        clearInterval(interval);
+        console.warn(`[Log Watchdog] Detected ${missingSoundMatches.length} missing sounds in latest.log!`);
+        sendProgress({
+          status: 'diagnostic_warning',
+          warningType: 'sound_errors',
+          title: 'Missing Sounds Detected',
+          message: `The game detected ${missingSoundMatches.length} missing sounds. The sound assets index or objects may be incomplete.`,
+          packKey: packKey
+        });
+        return;
+      }
+    } catch (e) {
+      // File may be locked by game process temporarily, retry next cycle
+    }
+  }, 2500);
+
+  if (proc) {
+    proc.on('close', () => {
+      clearInterval(interval);
+    });
+  }
+}
+
+/**
+ * Launches Minecraft using minecraft-launcher-core with shared game data and canonical assetIndex
+ */
+async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, mcVersion, loaderString, sendProgress, packKey = 'default') {
   let customVersionId = null;
+
+  // Resolve shared game data paths
+  const shared = getSharedGameData(instanceDir);
+  migrateLegacyInstanceFiles(instanceDir, shared);
 
   // Determine correct java executable to avoid console window popup
   let finalJavaPath = javaPath;
   if (!finalJavaPath) {
     finalJavaPath = process.platform === 'win32' ? 'javaw' : 'java';
   } else if (process.platform === 'win32' && finalJavaPath.toLowerCase().endsWith('java.exe')) {
-    // If user selected java.exe, try to quietly replace it with javaw.exe
     finalJavaPath = finalJavaPath.replace(/java\.exe$/i, 'javaw.exe');
   }
 
@@ -512,23 +747,27 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     }
   }
 
-  // Process loader
+  // Process loader (installed into shared storage)
   if (loaderString && loaderString.startsWith('fabric-')) {
     const loaderVersion = loaderString.substring('fabric-'.length);
     sendProgress({ status: 'installing_loader', message: 'Preparing Fabric Loader...' });
-    customVersionId = await installFabric(mcVersion, loaderVersion, instanceDir);
+    customVersionId = await installFabric(mcVersion, loaderVersion, shared);
   } else if (loaderString && loaderString.startsWith('neoforge-')) {
     const neoforgeVersion = loaderString.substring('neoforge-'.length);
     sendProgress({ status: 'installing_loader', message: 'Preparing NeoForge Loader...' });
-    customVersionId = await installNeoForge(mcVersion, neoforgeVersion, instanceDir, finalJavaPath, sendProgress);
+    customVersionId = await installNeoForge(mcVersion, neoforgeVersion, shared, finalJavaPath, sendProgress);
   } else if (loaderString && loaderString.startsWith('forge-')) {
     const forgeVersion = loaderString.substring('forge-'.length);
     sendProgress({ status: 'installing_loader', message: 'Preparing Forge Loader...' });
-    customVersionId = await installForge(mcVersion, forgeVersion, instanceDir, finalJavaPath, sendProgress);
+    customVersionId = await installForge(mcVersion, forgeVersion, shared, finalJavaPath, sendProgress);
   } else if (loaderString && loaderString.startsWith('optifine')) {
     sendProgress({ status: 'installing_loader', message: 'Preparing OptiFine Loader...' });
-    customVersionId = await installOptiFine(mcVersion, instanceDir, sendProgress);
+    customVersionId = await installOptiFine(mcVersion, shared, sendProgress);
   }
+
+  // Resolve canonical assetIndex
+  sendProgress({ status: 'downloading_assets', message: 'Preparing asset indexes and resources...' });
+  const { assetIndexId, vanillaJson } = await resolveAndPrepareAssetIndex(shared, customVersionId, mcVersion, sendProgress);
 
   sendProgress({ status: 'launching', message: 'Launching Minecraft...' });
 
@@ -543,14 +782,14 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
 
   // If a custom loader JSON exists (e.g. NeoForge / Forge), extract arguments.jvm that MCLC ignores
   if (customVersionId) {
-    const customJsonPath = path.join(instanceDir, 'versions', customVersionId, `${customVersionId}.json`);
+    const customJsonPath = path.join(shared.versions, customVersionId, `${customVersionId}.json`);
     if (fs.existsSync(customJsonPath)) {
       try {
         const customJson = JSON.parse(fs.readFileSync(customJsonPath, 'utf8'));
         if (customJson.arguments && Array.isArray(customJson.arguments.jvm)) {
-          const libDir = path.join(instanceDir, 'libraries');
+          const libDir = shared.libraries;
           const sep = process.platform === 'win32' ? ';' : ':';
-          const versionDir = path.join(instanceDir, 'versions', customVersionId);
+          const versionDir = path.join(shared.versions, customVersionId);
           
           for (const arg of customJson.arguments.jvm) {
             if (typeof arg === 'string') {
@@ -569,28 +808,33 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     }
   }
 
-    const opts = {
-      authorization: Authenticator.getAuth(nickname || 'Player'),
-      root: instanceDir,
-      version: {
-        number: mcVersion,
-        type: 'release',
-        ...(customVersionId ? { custom: customVersionId } : {})
-      },
-      memory: {
-        max: memoryMax,
-        min: '1G'
-      },
-      javaPath: finalJavaPath,
-      ...(customArgs.length ? { customArgs: customArgs } : {}),
-      overrides: {
-        assetIndex: mcVersion
-      }
-    };
+  const opts = {
+    authorization: Authenticator.getAuth(nickname || 'Player'),
+    root: shared.root,
+    version: {
+      number: mcVersion,
+      type: 'release',
+      ...(customVersionId ? { custom: customVersionId } : {})
+    },
+    memory: {
+      max: memoryMax,
+      min: '1G'
+    },
+    javaPath: finalJavaPath,
+    ...(customArgs.length ? { customArgs: customArgs } : {}),
+    overrides: {
+      gameDirectory: instanceDir,
+      cwd: instanceDir,
+      assetRoot: shared.assets,
+      libraryRoot: shared.libraries,
+      directory: path.join(shared.versions, customVersionId || mcVersion),
+      assetIndex: assetIndexId
+    }
+  };
 
-  console.log('Launching MCLC with options:', JSON.stringify({
+  console.log('Launching MCLC with shared assets & canonical index:', JSON.stringify({
     ...opts,
-    authorization: { name: opts.authorization.name } // redact tokens/uuid
+    authorization: { name: opts.authorization.name }
   }, null, 2));
 
   // Event Listeners for launcher
@@ -599,12 +843,10 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
   });
 
   launcher.on('data', (e) => {
-    // Game logs
     sendProgress({ status: 'game_running', message: e.trim() });
   });
 
   launcher.on('progress', (e) => {
-    // Download progress of libraries/assets
     const percent = (e.total && e.total > 0) ? Math.round((e.task / e.total) * 100) : 0;
     sendProgress({
       status: 'downloading_assets',
@@ -613,41 +855,33 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     });
   });
 
-  // Start the launch process
   try {
     if (customVersionId) {
-      // Trick MCLC into downloading vanilla game files first if they are missing
-      const vanillaJarPath = path.join(instanceDir, 'versions', mcVersion, `${mcVersion}.jar`);
+      // Ensure vanilla base jar exists in shared storage
+      const vanillaJarPath = path.join(shared.versions, mcVersion, `${mcVersion}.jar`);
       if (!fs.existsSync(vanillaJarPath)) {
-        sendProgress({ status: 'downloading_assets', message: 'Downloading vanilla Minecraft base files...' });
-        
-        const vanillaOpts = { ...opts };
-        vanillaOpts.version = { number: mcVersion, type: 'release' };
-        vanillaOpts.customArgs = ['-version']; // Java will immediately exit 0
-        
-        const vanillaLauncher = new Client();
-        
-        // Forward progress events
-        vanillaLauncher.on('progress', (e) => {
-          const percent = (e.total && e.total > 0) ? Math.round((e.task / e.total) * 100) : 0;
-          sendProgress({ status: 'downloading_assets', message: `Verifying base game files: ${e.type} (${e.task}/${e.total})`, progress: percent });
-        });
-
-        try {
-          const vanillaProc = await vanillaLauncher.launch(vanillaOpts);
-          await new Promise((resolve) => vanillaProc.on('close', resolve));
-        } catch (e) {
-          console.warn('Vanilla preload error (ignored):', e);
+        if (vanillaJson && vanillaJson.downloads && vanillaJson.downloads.client && vanillaJson.downloads.client.url) {
+          sendProgress({ status: 'downloading_assets', message: 'Downloading vanilla Minecraft base client...' });
+          await downloadFile(vanillaJson.downloads.client.url, vanillaJarPath);
+        } else {
+          // Fallback trick
+          const vanillaOpts = { ...opts };
+          vanillaOpts.version = { number: mcVersion, type: 'release' };
+          vanillaOpts.customArgs = ['-version'];
+          const vanillaLauncher = new Client();
+          try {
+            const vanillaProc = await vanillaLauncher.launch(vanillaOpts);
+            await new Promise((resolve) => vanillaProc.on('close', resolve));
+          } catch (e) {
+            console.warn('Vanilla preload error (ignored):', e);
+          }
         }
       }
 
-      // Fabric 0.16+ requires the vanilla jar in the classpath
-      // MCLC doesn't automatically add it for custom profiles
-      // Fix: copy the real vanilla jar over the dummy profile jar
-      // MCLC will automatically append the custom profile jar to the classpath!
+      // Fabric & NeoForge require vanilla jar in classpath; copy if missing
       if (!customVersionId.includes('OptiFine')) {
-        const customJarPath = path.join(instanceDir, 'versions', customVersionId, `${customVersionId}.jar`);
-        if (fs.existsSync(vanillaJarPath)) {
+        const customJarPath = path.join(shared.versions, customVersionId, `${customVersionId}.jar`);
+        if (fs.existsSync(vanillaJarPath) && !fs.existsSync(customJarPath)) {
           fs.copyFileSync(vanillaJarPath, customJarPath);
         }
       }
@@ -658,6 +892,9 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
     
     sendProgress({ status: 'game_started', message: 'Game started! You can close the launcher or play.' });
     
+    // Start log watchdog
+    startLogWatchdog(instanceDir, packKey, sendProgress, proc);
+
     proc.on('close', (code) => {
       console.log(`Minecraft exited with code ${code}`);
       if (code !== 0) {
@@ -672,6 +909,131 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
   }
 }
 
+/**
+ * Verifies and repairs a profile's assets, libraries, client.jar, and modpack files without deleting user files.
+ */
+async function repairProfile(instanceDir, packKey, sendProgress, options = {}) {
+  const shared = getSharedGameData(instanceDir);
+  migrateLegacyInstanceFiles(instanceDir, shared);
+
+  sendProgress({ status: 'repairing', message: 'Reading profile configuration...', progress: 5 });
+
+  const localVersionFile = path.join(instanceDir, 'local_version.json');
+  let localConfig = {};
+  if (fs.existsSync(localVersionFile)) {
+    try {
+      localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
+    } catch (e) {}
+  }
+
+  const mcVersion = options.mcVersion || localConfig.minecraft || '1.21.1';
+  const loaderString = options.loader || localConfig.loader || '';
+
+  sendProgress({ status: 'repairing', message: 'Verifying asset index and vanilla files...', progress: 15 });
+
+  let customVersionId = null;
+  if (loaderString.startsWith('neoforge-')) {
+    customVersionId = `neoforge-${loaderString.substring('neoforge-'.length)}`;
+  } else if (loaderString.startsWith('forge-')) {
+    customVersionId = `${mcVersion}-forge-${loaderString.substring('forge-'.length)}`;
+  } else if (loaderString.startsWith('fabric-')) {
+    customVersionId = `fabric-loader-${loaderString.substring('fabric-'.length)}-${mcVersion}`;
+  } else if (loaderString.startsWith('optifine')) {
+    customVersionId = `${mcVersion}-OptiFine_${mcVersion}_HD_U_I5`;
+  }
+
+  // 1. Resolve asset index
+  const { assetIndexId, vanillaJson } = await resolveAndPrepareAssetIndex(shared, customVersionId, mcVersion, sendProgress);
+
+  // 2. Verify vanilla client.jar
+  const vanillaJarPath = path.join(shared.versions, mcVersion, `${mcVersion}.jar`);
+  let needDownloadClient = !fs.existsSync(vanillaJarPath);
+  if (!needDownloadClient && vanillaJson && vanillaJson.downloads && vanillaJson.downloads.client && vanillaJson.downloads.client.sha1) {
+    const localJarSha1 = await getFileSha1(vanillaJarPath);
+    if (localJarSha1 !== vanillaJson.downloads.client.sha1) {
+      console.warn(`Vanilla client jar sha1 mismatch: expected ${vanillaJson.downloads.client.sha1}, got ${localJarSha1}`);
+      needDownloadClient = true;
+    }
+  }
+  if (needDownloadClient && vanillaJson && vanillaJson.downloads && vanillaJson.downloads.client && vanillaJson.downloads.client.url) {
+    sendProgress({ status: 'repairing', message: `Downloading vanilla Minecraft ${mcVersion} client...`, progress: 25 });
+    await downloadFile(vanillaJson.downloads.client.url, vanillaJarPath);
+  }
+
+  // 3. Verify loader jar
+  if (customVersionId && !customVersionId.includes('OptiFine')) {
+    const customJarPath = path.join(shared.versions, customVersionId, `${customVersionId}.jar`);
+    if (fs.existsSync(vanillaJarPath) && !fs.existsSync(customJarPath)) {
+      fs.copyFileSync(vanillaJarPath, customJarPath);
+    }
+  }
+
+  // 4. Verify asset objects from index
+  const indexFilePath = path.join(shared.assets, 'indexes', `${assetIndexId}.json`);
+  if (fs.existsSync(indexFilePath)) {
+    try {
+      const indexObj = JSON.parse(fs.readFileSync(indexFilePath, 'utf8'));
+      const objects = indexObj.objects || {};
+      const objectKeys = Object.keys(objects);
+      const missingObjects = [];
+
+      for (const key of objectKeys) {
+        const item = objects[key];
+        const hash = item.hash;
+        const sub = hash.substring(0, 2);
+        const objPath = path.join(shared.assets, 'objects', sub, hash);
+        if (!fs.existsSync(objPath) || (item.size && fs.statSync(objPath).size !== item.size)) {
+          missingObjects.push({ hash, sub, size: item.size });
+        }
+      }
+
+      if (missingObjects.length > 0) {
+        sendProgress({ status: 'repairing', message: `Restoring ${missingObjects.length} missing asset objects...`, progress: 35 });
+        console.log(`Repair: Found ${missingObjects.length} missing asset objects out of ${objectKeys.length}`);
+        
+        let completed = 0;
+        const limit = 8;
+        for (let i = 0; i < missingObjects.length; i += limit) {
+          const chunk = missingObjects.slice(i, i + limit);
+          await Promise.all(chunk.map(async (m) => {
+            const dest = path.join(shared.assets, 'objects', m.sub, m.hash);
+            const url = `https://resources.download.minecraft.net/${m.sub}/${m.hash}`;
+            try {
+              await downloadFile(url, dest);
+            } catch (err) {
+              console.warn(`Failed downloading asset object ${m.hash}:`, err.message);
+            }
+          }));
+          completed += chunk.length;
+          const pct = 35 + Math.round((completed / missingObjects.length) * 35);
+          sendProgress({ status: 'repairing', message: `Restoring assets (${completed}/${missingObjects.length})...`, progress: pct });
+        }
+      }
+    } catch (e) {
+      console.warn('Failed scanning asset index objects:', e);
+    }
+  }
+
+  // 5. Verify modpack mods by sha1 if mrpack or URL is configured
+  try {
+    const { verifyModpackFilesBySha1 } = require('./updater');
+    const mrpackUrl = options.configUrl || localConfig.mrpack_url;
+    if (mrpackUrl && typeof verifyModpackFilesBySha1 === 'function') {
+      sendProgress({ status: 'repairing', message: 'Verifying modpack files against manifest SHA-1...', progress: 75 });
+      await verifyModpackFilesBySha1(instanceDir, mrpackUrl, sendProgress);
+    }
+  } catch (err) {
+    console.warn('Modpack files verification error during repair:', err.message);
+  }
+
+  sendProgress({ status: 'ready', message: 'Profile verification and repair complete!', progress: 100 });
+  return { success: true };
+}
+
 module.exports = {
-  launchMinecraft
+  launchMinecraft,
+  repairProfile,
+  resolveAndPrepareAssetIndex,
+  getSharedGameData,
+  migrateLegacyInstanceFiles
 };

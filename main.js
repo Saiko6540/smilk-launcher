@@ -2,7 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { checkAndInstallUpdate } = require('./updater');
-const { launchMinecraft } = require('./launcher');
+const { launchMinecraft, repairProfile } = require('./launcher');
+const { getPackBuiltinModsInfo } = require('./mod-helper');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
@@ -53,7 +54,8 @@ const defaultSettings = {
   javaPath: '',
   jvmArgs: '-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC',
   selectedPack: 'pluto',
-  mockMode: false // Disabled by default for normal production play
+  mockMode: false, // Disabled by default for normal production play
+  addons: {}
 };
 
 // Default modpacks configuration
@@ -346,11 +348,65 @@ ipcMain.handle('reset-pack-settings', (event, packKey) => {
   try {
     const instancesDir = path.join(userDataPath, 'game_data', 'instances');
     const packDir = path.join(instancesDir, packKey);
-    const optionsPath = path.join(packDir, '.minecraft', 'options.txt');
-    if (fs.existsSync(optionsPath)) {
-      fs.unlinkSync(optionsPath);
-    }
+    const optionsPath = path.join(packDir, 'options.txt');
+    const legacyOptionsPath = path.join(packDir, '.minecraft', 'options.txt');
+    if (fs.existsSync(optionsPath)) fs.unlinkSync(optionsPath);
+    if (fs.existsSync(legacyOptionsPath)) fs.unlinkSync(legacyOptionsPath);
     
+    // Reset shaders state in instance files and delete shader mods (skip Pluto because Iris is native to the modpack)
+    if (packKey !== 'pluto') {
+      const modsDir = path.join(packDir, 'mods');
+      if (fs.existsSync(modsDir)) {
+        const files = fs.readdirSync(modsDir);
+        for (const file of files) {
+          const nameLower = file.toLowerCase();
+          if ((nameLower.startsWith('iris') || nameLower.startsWith('oculus')) && nameLower.endsWith('.jar') && !nameLower.includes('compat')) {
+            try {
+              fs.unlinkSync(path.join(modsDir, file));
+              console.log(`Reset Pack Settings: Removed shader mod: ${file}`);
+            } catch (e) {}
+          }
+        }
+      }
+    } else {
+      const flwConfig = path.join(packDir, 'config', 'flywheel-client.toml');
+      if (fs.existsSync(flwConfig)) {
+        try {
+          let flwContent = fs.readFileSync(flwConfig, 'utf8');
+          if (!flwContent.includes('backend = "flywheel:instancing"')) {
+            flwContent = flwContent.replace(/backend\s*=\s*".*"/g, 'backend = "flywheel:instancing"');
+            fs.writeFileSync(flwConfig, flwContent, 'utf8');
+          }
+        } catch (e) {}
+      }
+    }
+    const irisProp = path.join(packDir, 'config', 'iris.properties');
+    if (fs.existsSync(irisProp)) {
+      try {
+        let irisContent = fs.readFileSync(irisProp, 'utf8');
+        irisContent = irisContent.replace(/enableShaders\s*=\s*true/g, 'enableShaders=false');
+        fs.writeFileSync(irisProp, irisContent, 'utf8');
+      } catch (e) {}
+    }
+    const optiShaders = path.join(packDir, 'optionsshaders.txt');
+    if (fs.existsSync(optiShaders)) {
+      try {
+        let optiContent = fs.readFileSync(optiShaders, 'utf8');
+        optiContent = optiContent.replace(/shaderPack=.*/g, 'shaderPack=OFF');
+        fs.writeFileSync(optiShaders, optiContent, 'utf8');
+      } catch (e) {}
+    }
+    const localVer = path.join(packDir, 'local_version.json');
+    if (fs.existsSync(localVer)) {
+      try {
+        const verData = JSON.parse(fs.readFileSync(localVer, 'utf8'));
+        if (verData.addons) {
+          verData.addons.shaders = false;
+          fs.writeFileSync(localVer, JSON.stringify(verData, null, 2));
+        }
+      } catch (e) {}
+    }
+
     // Also remove shaders and other addon settings from global config
     if (fs.existsSync(settingsPath)) {
       const data = fs.readFileSync(settingsPath, 'utf-8');
@@ -820,6 +876,9 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
   const sendProgress = (data) => {
     if (mainWindow) {
       mainWindow.webContents.send('launch-status', data);
+      if (data.status === 'diagnostic_warning') {
+        mainWindow.webContents.send('game-diagnostic-warning', data);
+      }
     }
 
     // Discord RPC Update
@@ -873,7 +932,8 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
       settings.jvmArgs,
       localConfig.minecraft,
       localConfig.loader,
-      sendProgress
+      sendProgress,
+      packKey
     );
     return { success: true };
   } catch (err) {
@@ -881,6 +941,47 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
       sendProgress({ status: 'java-error', requiredVersion: err.requiredVersion, message: err.message });
       return { success: false, javaError: true, requiredVersion: err.requiredVersion, error: err.message };
     }
+    sendProgress({ status: 'error', message: err.message });
+    return { success: false, error: err.message };
+  }
+});
+
+// Check Installed Mods IPC
+ipcMain.handle('check-installed-mods', async (event, packKey) => {
+  try {
+    const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+    return getPackBuiltinModsInfo(instanceDir);
+  } catch (e) {
+    return { hasIris: false, hasOculus: false, hasBuiltinShaders: false, totalModsCount: 0 };
+  }
+});
+
+// Repair Profile IPC
+ipcMain.handle('repair-profile', async (event, packKey) => {
+  const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
+  const pack = modpacks[packKey];
+  if (!pack) throw new Error('Unknown modpack');
+
+  const sendProgress = (data) => {
+    if (mainWindow) {
+      mainWindow.webContents.send('update-status', data);
+    }
+    if (consoleWindow && !consoleWindow.isDestroyed() && data.message) {
+      consoleWindow.webContents.send('console-log', {
+        message: `[Repair] ${data.message}`,
+        level: data.status === 'error' ? 'error' : 'info'
+      });
+    }
+  };
+
+  try {
+    await repairProfile(instanceDir, packKey, sendProgress, {
+      mcVersion: pack.mcVersion,
+      loader: pack.loader,
+      configUrl: pack.configUrl
+    });
+    return { success: true };
+  } catch (err) {
     sendProgress({ status: 'error', message: err.message });
     return { success: false, error: err.message };
   }

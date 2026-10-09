@@ -4,6 +4,7 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
+const { hasModId, scanModsDirectory, getFileSha1 } = require('./mod-helper');
 
 /**
  * Helper to download a file with progress tracking, redirect following, and robust error handling
@@ -163,7 +164,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   console.log(`Checking updates for ${packKey} from ${configUrl}`);
   sendProgress({ status: 'checking', message: 'Checking for updates...' });
 
-  const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders !== undefined) ? settings.addons[packKey].shaders : true;
+  const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders !== undefined) ? settings.addons[packKey].shaders : false;
 
   // --- VANILLA / NO-MRPACK MODE ---
   if (configUrl === 'vanilla') {
@@ -208,6 +209,9 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
 
   let remoteConfig;
 
+  let branchOptionsUrl = null;
+  let branchServersUrl = null;
+
   // Dynamic Auto-resolve for any GitHub URL (branch/tree/raw) to find whatever .mrpack file exists on that branch
   const ghMatch = configUrl.match(/(?:github\.com\/([^\/]+)\/([^\/]+)\/(?:tree|raw)\/([^\/]+))|(?:raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+))/);
   if (ghMatch) {
@@ -235,6 +239,15 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
             configUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${mrpackFile.path.split('/').map(encodeURIComponent).join('/')}`;
             console.log(`Auto-resolved branch '${branch}' .mrpack file to: ${configUrl}`);
           }
+          if (treeRes.tree.some(f => f.path.toLowerCase() === 'options.txt')) {
+            branchOptionsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/options.txt`;
+          }
+          if (treeRes.tree.some(f => f.path.toLowerCase() === 'servers.dat')) {
+            branchServersUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/servers.dat`;
+          }
+        } else {
+          branchOptionsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/options.txt`;
+          branchServersUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/servers.dat`;
         }
       }
     } catch (err) {
@@ -309,6 +322,11 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
     }
   }
 
+  if (remoteConfig) {
+    remoteConfig.branchOptionsUrl = branchOptionsUrl;
+    remoteConfig.branchServersUrl = branchServersUrl;
+  }
+
   // Get local version
   const localVersionFile = path.join(instanceDir, 'local_version.json');
   let localConfig = null;
@@ -343,15 +361,54 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
     }
 
     if (localShaders === targetShaders) {
+      // Sync missing servers.dat or options.txt if provided on branch
+      if (remoteConfig.branchServersUrl && !fs.existsSync(path.join(instanceDir, 'servers.dat'))) {
+        try {
+          await downloadFile(remoteConfig.branchServersUrl, path.join(instanceDir, 'servers.dat'));
+          console.log(`Synced missing servers.dat for ${packKey}`);
+        } catch (e) {
+          console.warn('Failed to sync missing servers.dat:', e.message);
+        }
+      }
+      if (remoteConfig.branchOptionsUrl && !fs.existsSync(path.join(instanceDir, 'options.txt'))) {
+        try {
+          await downloadFile(remoteConfig.branchOptionsUrl, path.join(instanceDir, 'options.txt'));
+          console.log(`Synced missing options.txt for ${packKey}`);
+        } catch (e) {
+          console.warn('Failed to sync missing options.txt:', e.message);
+        }
+      }
+
       console.log(`${packKey} is up to date (${localConfig.version})`);
       sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)})`, config: localConfig });
       return localConfig;
     } else {
-      // Version matches, but shaders state has changed! Let's do an incremental update.
-      console.log(`Incremental shaders update for ${packKey}. Toggling shaders to: ${targetShaders}`);
-      
       const modsDir = path.join(instanceDir, 'mods');
       fs.mkdirSync(modsDir, { recursive: true });
+
+      // Check if pack has built-in Iris or Oculus
+      const hasBuiltinShaders = packKey === 'pluto' || hasModId(modsDir, 'iris') || hasModId(modsDir, 'oculus');
+
+      if (hasBuiltinShaders) {
+        console.log(`Incremental shaders update for ${packKey} (built-in shaders detected). Toggling shaders to: ${targetShaders}`);
+        const irisProp = path.join(instanceDir, 'config', 'iris.properties');
+        if (fs.existsSync(irisProp)) {
+          try {
+            let irisContent = fs.readFileSync(irisProp, 'utf8');
+            const replacement = targetShaders ? 'enableShaders=true' : 'enableShaders=false';
+            irisContent = irisContent.replace(/enableShaders\s*=\s*(?:true|false)/g, replacement);
+            fs.writeFileSync(irisProp, irisContent, 'utf8');
+          } catch (e) {}
+        }
+        localConfig.addons = localConfig.addons || {};
+        localConfig.addons.shaders = targetShaders;
+        fs.writeFileSync(localVersionFile, JSON.stringify(localConfig, null, 2), 'utf8');
+        sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)})`, config: localConfig });
+        return localConfig;
+      }
+
+      // Version matches, but shaders state has changed for non-builtin modpack! Let's do an incremental update.
+      console.log(`Incremental shaders update for ${packKey}. Toggling addon shaders to: ${targetShaders}`);
 
       if (targetShaders) {
         // Enable: download shaders mod
@@ -360,7 +417,6 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         const loader = remoteConfig.loader || localConfig.loader;
         const isFabric = loader.startsWith('fabric');
         const isNeoForge = loader.startsWith('neoforge');
-        // Minecraft 1.21.1 Fabric and NeoForge require Iris; Forge-based older packs use Oculus.
         const modSlug = (isFabric || isNeoForge) ? 'iris' : 'oculus';
         const modLoader = isFabric ? 'fabric' : (isNeoForge ? 'neoforge' : 'forge');
 
@@ -381,19 +437,44 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
           console.error('Failed to resolve shaders mod for incremental update:', apiErr);
           throw new Error('Failed to download shaders mod: ' + apiErr.message);
         }
+
+        const irisProp = path.join(instanceDir, 'config', 'iris.properties');
+        if (fs.existsSync(irisProp)) {
+          try {
+            let irisContent = fs.readFileSync(irisProp, 'utf8');
+            irisContent = irisContent.replace(/enableShaders\s*=\s*false/g, 'enableShaders=true');
+            fs.writeFileSync(irisProp, irisContent, 'utf8');
+          } catch (e) {}
+        }
       } else {
-        // Disable: delete shaders mod
+        // Disable: delete external shaders addon mod
         sendProgress({ status: 'cleaning', message: 'Disabling shaders support...' });
         if (fs.existsSync(modsDir)) {
           const files = fs.readdirSync(modsDir);
           for (const file of files) {
             const nameLower = file.toLowerCase();
-            if ((nameLower.startsWith('iris') || nameLower.startsWith('oculus')) && nameLower.endsWith('.jar')) {
+            if ((nameLower.startsWith('iris') || nameLower.startsWith('oculus')) && nameLower.endsWith('.jar') && !nameLower.includes('compat')) {
               const filePath = path.join(modsDir, file);
               fs.unlinkSync(filePath);
               console.log(`Incremental Addon: Deleted shaders mod: ${filePath}`);
             }
           }
+        }
+        const irisProp = path.join(instanceDir, 'config', 'iris.properties');
+        if (fs.existsSync(irisProp)) {
+          try {
+            let irisContent = fs.readFileSync(irisProp, 'utf8');
+            irisContent = irisContent.replace(/enableShaders\s*=\s*true/g, 'enableShaders=false');
+            fs.writeFileSync(irisProp, irisContent, 'utf8');
+          } catch (e) {}
+        }
+        const optiShaders = path.join(instanceDir, 'optionsshaders.txt');
+        if (fs.existsSync(optiShaders)) {
+          try {
+            let optiContent = fs.readFileSync(optiShaders, 'utf8');
+            optiContent = optiContent.replace(/shaderPack=.*/g, 'shaderPack=OFF');
+            fs.writeFileSync(optiShaders, optiContent, 'utf8');
+          } catch (e) {}
         }
       }
 
@@ -436,8 +517,22 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   const indexJson = JSON.parse(zip.readAsText(indexEntry));
   const filesToDownload = indexJson.files || [];
 
-  // Handle Shaders Addon dynamically
-  if (targetShaders) {
+  // Handle Shaders Addon dynamically (skip if pack already has Iris/Oculus bundled, e.g. Pluto)
+  const modsDir = path.join(instanceDir, 'mods');
+  fs.mkdirSync(modsDir, { recursive: true });
+  const hasIrisOnDisk = hasModId(modsDir, 'iris');
+  const hasOculusOnDisk = hasModId(modsDir, 'oculus');
+  const hasShaderInIncoming = filesToDownload.some(f => {
+    const p = (f.path || '').toLowerCase();
+    return (p.includes('iris') || p.includes('oculus')) && p.endsWith('.jar') && !p.includes('compat');
+  }) || zip.getEntries().some(e => {
+    const p = e.entryName.toLowerCase();
+    return (p.includes('iris') || p.includes('oculus')) && p.endsWith('.jar') && !p.includes('compat');
+  });
+
+  const hasBuiltinShaders = packKey === 'pluto' || hasIrisOnDisk || hasOculusOnDisk || hasShaderInIncoming;
+
+  if (targetShaders && !hasBuiltinShaders) {
     const mcVersion = remoteConfig.minecraft || indexJson.dependencies.minecraft;
     const loader = remoteConfig.loader || (indexJson.dependencies['fabric-loader'] ? `fabric-${indexJson.dependencies['fabric-loader']}` : (indexJson.dependencies['neoforge'] ? `neoforge-${indexJson.dependencies['neoforge']}` : `forge-${indexJson.dependencies['forge']}`));
     const isFabric = loader.startsWith('fabric');
@@ -473,19 +568,42 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
     }
   }
 
-  // 4. Clean mods and config folders
-  sendProgress({ status: 'cleaning', message: 'Cleaning existing mods and config...' });
-  const modsDir = path.join(instanceDir, 'mods');
-  if (fs.existsSync(modsDir)) {
-    fs.rmSync(modsDir, { recursive: true, force: true });
-  }
-  fs.mkdirSync(modsDir, { recursive: true });
-
+  // 4. Safe sync using managed_files.json manifest (DO NOT delete mods_disabled or custom user mods)
+  sendProgress({ status: 'cleaning', message: 'Syncing modpack files safely...' });
   const configDir = path.join(instanceDir, 'config');
-  if (fs.existsSync(configDir)) {
-    fs.rmSync(configDir, { recursive: true, force: true });
-  }
   fs.mkdirSync(configDir, { recursive: true });
+
+  const managedManifestPath = path.join(instanceDir, 'managed_files.json');
+  let oldManagedFiles = [];
+  if (fs.existsSync(managedManifestPath)) {
+    try {
+      const manifestData = JSON.parse(fs.readFileSync(managedManifestPath, 'utf8'));
+      if (Array.isArray(manifestData.files)) {
+        oldManagedFiles = manifestData.files;
+      }
+    } catch (e) {
+      console.warn('Failed to parse managed_files.json:', e);
+    }
+  }
+
+  // Set of normalized relative paths in the new modpack version
+  const newRelativePaths = new Set(filesToDownload.map(f => f.path.replace(/\\/g, '/')));
+
+  // Remove ONLY previously-managed files that are no longer part of the new version
+  for (const oldRelPath of oldManagedFiles) {
+    const normalized = oldRelPath.replace(/\\/g, '/');
+    if (!newRelativePaths.has(normalized)) {
+      const fullOldPath = path.join(instanceDir, normalized);
+      if (fs.existsSync(fullOldPath)) {
+        try {
+          fs.unlinkSync(fullOldPath);
+          console.log(`[Safe Sync] Removed deprecated modpack file: ${normalized}`);
+        } catch (e) {
+          console.warn(`[Safe Sync] Failed to remove old managed file ${normalized}:`, e);
+        }
+      }
+    }
+  }
 
   // 5. Download mods
   sendProgress({ status: 'downloading_mods', message: 'Downloading mods...', progress: 0 });
@@ -493,10 +611,17 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   const downloadTasks = filesToDownload.map((fileInfo) => {
     return async () => {
       const url = fileInfo.downloads[0];
-      const relativePath = fileInfo.path; // e.g. "mods/sodium.jar"
+      const relativePath = fileInfo.path;
       const destPath = path.join(instanceDir, relativePath);
       
-      // Download single file
+      // If file already exists and hash matches, skip re-download
+      if (fs.existsSync(destPath) && fileInfo.hashes && fileInfo.hashes.sha1) {
+        const localSha = await getFileSha1(destPath);
+        if (localSha === fileInfo.hashes.sha1) {
+          return;
+        }
+      }
+
       await downloadFile(url, destPath);
     };
   });
@@ -510,6 +635,19 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
       progress: percent
     });
   });
+
+  // Save updated managed files manifest
+  try {
+    const newManagedList = Array.from(newRelativePaths);
+    fs.writeFileSync(managedManifestPath, JSON.stringify({
+      version: remoteConfig.version,
+      packVersion: indexJson.versionId || '1.0.0',
+      files: newManagedList,
+      updatedAt: new Date().toISOString()
+    }, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Failed to save managed_files.json:', e);
+  }
 
   // 6. Extract overrides
   sendProgress({ status: 'overrides', message: 'Installing configuration and overrides...' });
@@ -535,6 +673,16 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         fs.mkdirSync(destPath, { recursive: true });
       } else {
         fs.mkdirSync(path.dirname(destPath), { recursive: true });
+        
+        // Preserve user customizations in existing iris.properties or flywheel config
+        const normPath = targetRelativePath.replace(/\\/g, '/');
+        if (normPath === 'config/iris.properties' && fs.existsSync(destPath)) {
+          continue;
+        }
+        if (normPath === 'config/flywheel-client.toml' && fs.existsSync(destPath)) {
+          continue;
+        }
+
         fs.writeFileSync(destPath, entry.getData());
       }
     }
@@ -545,6 +693,67 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
     fs.unlinkSync(mrpackPath);
   } catch (e) {
     console.warn('Failed to delete temp mrpack file:', e);
+  }
+
+  // Configure shaders and Flywheel defaults after extracting overrides
+  const irisProp = path.join(instanceDir, 'config', 'iris.properties');
+  if (fs.existsSync(irisProp) && !targetShaders) {
+    try {
+      let irisContent = fs.readFileSync(irisProp, 'utf8');
+      irisContent = irisContent.replace(/enableShaders\s*=\s*true/g, 'enableShaders=false');
+      fs.writeFileSync(irisProp, irisContent, 'utf8');
+    } catch (e) {}
+  }
+
+  // For Pluto: ensure Flywheel instancing backend is preserved
+  if (packKey === 'pluto') {
+    const flwConfig = path.join(instanceDir, 'config', 'flywheel-client.toml');
+    if (fs.existsSync(flwConfig)) {
+      try {
+        let flwContent = fs.readFileSync(flwConfig, 'utf8');
+        if (!flwContent.includes('backend = "flywheel:instancing"')) {
+          flwContent = flwContent.replace(/backend\s*=\s*".*"/g, 'backend = "flywheel:instancing"');
+          fs.writeFileSync(flwConfig, flwContent, 'utf8');
+          console.log('Ensured Flywheel instancing backend in config/flywheel-client.toml');
+        }
+      } catch (e) {}
+    }
+  }
+
+  const optiShaders = path.join(instanceDir, 'optionsshaders.txt');
+  if (fs.existsSync(optiShaders) && !targetShaders) {
+    try {
+      let optiContent = fs.readFileSync(optiShaders, 'utf8');
+      optiContent = optiContent.replace(/shaderPack=.*/g, 'shaderPack=OFF');
+      fs.writeFileSync(optiShaders, optiContent, 'utf8');
+    } catch (e) {}
+  }
+
+  // 7. Sync branch options.txt and servers.dat if available in repository (only if not already created by user)
+  if (remoteConfig.branchOptionsUrl) {
+    const optionsDest = path.join(instanceDir, 'options.txt');
+    if (!fs.existsSync(optionsDest)) {
+      sendProgress({ status: 'overrides', message: 'Syncing options.txt from repository...' });
+      try {
+        await downloadFile(remoteConfig.branchOptionsUrl, optionsDest);
+        console.log(`Successfully synced branch options.txt to ${optionsDest}`);
+      } catch (err) {
+        console.warn('Failed to sync branch options.txt:', err.message);
+      }
+    }
+  }
+
+  if (remoteConfig.branchServersUrl) {
+    const serversDest = path.join(instanceDir, 'servers.dat');
+    if (!fs.existsSync(serversDest)) {
+      sendProgress({ status: 'overrides', message: 'Syncing servers.dat from repository...' });
+      try {
+        await downloadFile(remoteConfig.branchServersUrl, serversDest);
+        console.log(`Successfully synced branch servers.dat to ${serversDest}`);
+      } catch (err) {
+        console.warn('Failed to sync branch servers.dat:', err.message);
+      }
+    }
   }
 
   // Detect loader from dependencies
@@ -582,6 +791,88 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   return finalConfig;
 }
 
+/**
+ * Verifies modpack files against .mrpack manifest using SHA-1.
+ * Re-downloads missing or corrupted mods without deleting user files.
+ */
+async function verifyModpackFilesBySha1(instanceDir, configUrl, sendProgress) {
+  let actualMrpackUrl = configUrl;
+  if (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com')) {
+    const ghMatch = configUrl.match(/github(?:usercontent)?\.com\/(?:raw\/)?([^\/]+)\/([^\/]+)\/(?:raw\/)?([^\/]+)\/(.+)/);
+    if (ghMatch) {
+      const [_, owner, repo, branch, filepath] = ghMatch;
+      actualMrpackUrl = `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${filepath}`;
+    }
+  }
+
+  const tempPackPath = path.join(instanceDir, 'verify_temp.mrpack');
+  if (sendProgress) sendProgress({ status: 'repairing', message: 'Fetching modpack manifest for verification...', progress: 78 });
+  await downloadFile(actualMrpackUrl, tempPackPath);
+
+  let zip;
+  try {
+    zip = new AdmZip(tempPackPath);
+  } catch (e) {
+    try { fs.unlinkSync(tempPackPath); } catch (err) {}
+    throw new Error('Failed to open modpack manifest archive.');
+  }
+
+  const indexEntry = zip.getEntry('modrinth.index.json');
+  if (!indexEntry) {
+    try { fs.unlinkSync(tempPackPath); } catch (err) {}
+    throw new Error('Invalid .mrpack archive: missing modrinth.index.json');
+  }
+
+  const indexJson = JSON.parse(zip.readAsText(indexEntry));
+  const files = indexJson.files || [];
+  const modsDir = path.join(instanceDir, 'mods');
+  fs.mkdirSync(modsDir, { recursive: true });
+
+  const filesToFix = [];
+  for (const fileInfo of files) {
+    const destPath = path.join(instanceDir, fileInfo.path);
+    if (!fs.existsSync(destPath)) {
+      filesToFix.push(fileInfo);
+    } else if (fileInfo.hashes && fileInfo.hashes.sha1) {
+      const currentSha1 = await getFileSha1(destPath);
+      if (currentSha1 !== fileInfo.hashes.sha1) {
+        console.warn(`SHA-1 mismatch for ${fileInfo.path}: expected ${fileInfo.hashes.sha1}, got ${currentSha1}`);
+        filesToFix.push(fileInfo);
+      }
+    }
+  }
+
+  try { fs.unlinkSync(tempPackPath); } catch (err) {}
+
+  if (filesToFix.length > 0) {
+    if (sendProgress) sendProgress({ status: 'repairing', message: `Restoring ${filesToFix.length} mod files...`, progress: 85 });
+    console.log(`Verify: Found ${filesToFix.length} files to repair`);
+    
+    let completed = 0;
+    const downloadTasks = filesToFix.map(fileInfo => async () => {
+      const destPath = path.join(instanceDir, fileInfo.path);
+      fs.mkdirSync(path.dirname(destPath), { recursive: true });
+      await downloadFile(fileInfo.downloads[0], destPath);
+      completed++;
+      const pct = 85 + Math.round((completed / filesToFix.length) * 14);
+      if (sendProgress) {
+        sendProgress({
+          status: 'repairing',
+          message: `Restoring mods (${completed}/${filesToFix.length})...`,
+          progress: pct
+        });
+      }
+    });
+
+    await asyncQueue(downloadTasks, 5);
+  } else {
+    console.log('Verify: All modpack files verified successfully with correct SHA-1.');
+  }
+
+  return { verified: true, fixedCount: filesToFix.length };
+}
+
 module.exports = {
-  checkAndInstallUpdate
+  checkAndInstallUpdate,
+  verifyModpackFilesBySha1
 };

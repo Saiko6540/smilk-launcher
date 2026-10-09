@@ -2064,16 +2064,84 @@ if (openInstancesBtn) {
 // Modpack Settings Modal Logic
 let editingPackSettings = null;
 
-async function openPackSettings(packKey) {
+function openPackSettings(packKey) {
   editingPackSettings = packKey;
   const details = packDetails[packKey];
   if (packSettingsTitle && details) {
     packSettingsTitle.textContent = `${details.title} Configuration`;
   }
+
+  const shadersTitleEl = document.getElementById('pack-shaders-title');
+  const shadersSubEl = document.getElementById('pack-shaders-subtitle');
+  const isOptiFine = details && (details.loader || '').toLowerCase().includes('optifine');
   
-  // Disable Reset & Delete buttons if modpack is not installed
-  try {
-    const info = await window.api.checkUpdates(packKey);
+  // Fast initial detection for built-in shaders (e.g. Pluto or OptiFine)
+  let hasBuiltinShaders = isOptiFine || packKey === 'pluto';
+
+  if (packShadersBuiltinBadge) {
+    packShadersBuiltinBadge.style.display = hasBuiltinShaders ? 'inline-block' : 'none';
+  }
+
+  if (shadersTitleEl) {
+    shadersTitleEl.textContent = isOptiFine ? 'OptiFine Shaders Support' : 'Shader Support (Iris / Oculus)';
+  }
+  if (shadersSubEl) {
+    if (hasBuiltinShaders) {
+      shadersSubEl.textContent = 'Shaders (Iris) are already built into this modpack. Shaderpacks can be added below.';
+    } else if (isOptiFine) {
+      shadersSubEl.textContent = 'Enables shaders. Uses built-in OptiFine shaderpacks manager.';
+    } else {
+      shadersSubEl.textContent = 'Enables shaders. Installs Iris (Fabric) or Oculus (Forge).';
+    }
+  }
+
+  if (!configSettings.addons) configSettings.addons = {};
+  if (!configSettings.addons[packKey] || hasBuiltinShaders) configSettings.addons[packKey] = { shaders: hasBuiltinShaders };
+  
+  const packAddons = configSettings.addons[packKey];
+  if (packSettingsShaders) {
+    packSettingsShaders.checked = hasBuiltinShaders ? true : (packAddons.shaders || false);
+    packSettingsShaders.disabled = hasBuiltinShaders;
+  }
+  if (packShadersActions) {
+    packShadersActions.style.display = 'flex';
+  }
+
+  // Both tabs remain available so users can customize options and shaders
+  const tabBtnAddonsEl = document.getElementById('tab-btn-addons');
+  if (tabBtnAddonsEl) tabBtnAddonsEl.style.display = 'block';
+  switchSettingsTab('addons');
+
+  // INSTANTLY reveal modal to eliminate any UI freeze or lag on click
+  if (packSettingsModal) {
+    packSettingsModal.classList.remove('hidden');
+  }
+
+  // Load installed shaders list asynchronously in the background
+  loadInstalledShaders(packKey);
+
+  // Background non-blocking check for built-in shaders from mods directory
+  window.api.checkInstalledMods(packKey).then((modsInfo) => {
+    if (editingPackSettings !== packKey) return;
+    if (modsInfo && modsInfo.hasBuiltinShaders) {
+      hasBuiltinShaders = true;
+      if (packShadersBuiltinBadge) packShadersBuiltinBadge.style.display = 'inline-block';
+      if (shadersSubEl) {
+        shadersSubEl.textContent = 'Shaders (Iris) are already built into this modpack. Shaderpacks can be added below.';
+      }
+      if (packSettingsShaders) {
+        packSettingsShaders.checked = true;
+        packSettingsShaders.disabled = true;
+      }
+      if (configSettings.addons && configSettings.addons[packKey]) {
+        configSettings.addons[packKey].shaders = true;
+      }
+    }
+  }).catch(() => {});
+
+  // Background non-blocking check for installation status to configure action buttons
+  window.api.checkUpdates(packKey).then((info) => {
+    if (editingPackSettings !== packKey) return;
     const isInstalled = info && info.localVersion && info.localVersion !== 'none';
     if (packSettingsResetBtn) {
       packSettingsResetBtn.disabled = !isInstalled;
@@ -2083,53 +2151,13 @@ async function openPackSettings(packKey) {
       packSettingsDeleteBtn.disabled = !isInstalled;
       packSettingsDeleteBtn.title = isInstalled ? 'Delete this modpack completely' : 'Modpack is not installed';
     }
-  } catch (e) {
+    if (packSettingsRepairBtn) {
+      packSettingsRepairBtn.disabled = !isInstalled;
+      packSettingsRepairBtn.title = isInstalled ? 'Verify and repair profile files (assets, libraries, mods)' : 'Modpack is not installed';
+    }
+  }).catch((e) => {
     console.warn('Failed to check installation status for pack settings buttons:', e);
-  }
-
-  const shadersTitleEl = document.getElementById('pack-shaders-title');
-  const shadersSubEl = document.getElementById('pack-shaders-subtitle');
-  const isOptiFine = details && (details.loader || '').toLowerCase().includes('optifine');
-
-  if (shadersTitleEl) {
-    shadersTitleEl.textContent = isOptiFine ? 'OptiFine Shaders Support' : 'Shader Support (Iris / Oculus)';
-  }
-  if (shadersSubEl) {
-    shadersSubEl.textContent = isOptiFine 
-      ? 'Enables shaders. Uses built-in OptiFine shaderpacks manager.' 
-      : 'Enables shaders. Installs Iris (Fabric) or Oculus (Forge).';
-  }
-
-  if (!configSettings.addons) configSettings.addons = {};
-  if (!configSettings.addons[packKey]) configSettings.addons[packKey] = { shaders: true };
-  
-  const packAddons = configSettings.addons[packKey];
-  if (packSettingsShaders) {
-    packSettingsShaders.checked = packAddons.shaders || false;
-  }
-  if (packShadersActions) {
-    packShadersActions.style.display = packAddons.shaders ? 'flex' : 'none';
-  }
-  
-  if (packAddons.shaders) {
-    loadInstalledShaders(packKey);
-  } else {
-    if (installedShadersContainer) installedShadersContainer.style.display = 'none';
-  }
-
-  // If OptiFine pack, hide Addons tab since shaders/addons are native to OptiFine
-  const tabBtnAddonsEl = document.getElementById('tab-btn-addons');
-  if (isOptiFine) {
-    if (tabBtnAddonsEl) tabBtnAddonsEl.style.display = 'none';
-    switchSettingsTab('options');
-  } else {
-    if (tabBtnAddonsEl) tabBtnAddonsEl.style.display = 'block';
-    switchSettingsTab('addons');
-  }
-
-  if (packSettingsModal) {
-    packSettingsModal.classList.remove('hidden');
-  }
+  });
 }
 
 // Event Delegation for Gear button clicks in Modpack List
@@ -2592,7 +2620,7 @@ if (packSettingsSave) {
     if (editingPackSettings) {
       if (!configSettings.addons) configSettings.addons = {};
       configSettings.addons[editingPackSettings] = {
-        shaders: packSettingsShaders.checked
+        shaders: editingPackSettings === 'pluto' ? false : packSettingsShaders.checked
       };
       
       const settings = {
@@ -2649,6 +2677,60 @@ if (packSettingsSave) {
 
 const packSettingsResetBtn = document.getElementById('pack-settings-reset');
 const packSettingsDeleteBtn = document.getElementById('pack-settings-delete');
+const packSettingsRepairBtn = document.getElementById('pack-settings-repair');
+const packShadersBuiltinBadge = document.getElementById('pack-shaders-builtin-badge');
+
+if (packSettingsRepairBtn) {
+  packSettingsRepairBtn.addEventListener('click', async () => {
+    if (editingPackSettings) {
+      const confirm = await showCustomConfirm(
+        'Verify and repair profile files? This checks vanilla client.jar, assets (indexes and sounds), libraries, and modpack files against SHA-1 checksums without deleting your custom files or configs.',
+        'Verify & Repair Profile',
+        'info',
+        'Start Repair'
+      );
+      if (confirm) {
+        packSettingsRepairBtn.disabled = true;
+        packSettingsRepairBtn.textContent = 'Verifying...';
+        showToast('Verifying and repairing profile files...', 'info');
+
+        const res = await window.api.repairProfile(editingPackSettings);
+        packSettingsRepairBtn.disabled = false;
+        packSettingsRepairBtn.textContent = 'Verify & Repair';
+
+        if (res && res.success) {
+          await showCustomAlert('Profile files and assets have been verified and repaired successfully!', 'success', 'Repair Complete');
+          if (packSettingsModal) packSettingsModal.classList.add('hidden');
+          updateVersionCheck();
+        } else {
+          await showCustomAlert('Repair encountered an issue: ' + (res ? res.error : 'Unknown error'), 'error', 'Repair Error');
+        }
+      }
+    }
+  });
+}
+
+// Post-launch diagnostic watchdog warning handler
+if (window.api && window.api.onGameDiagnosticWarning) {
+  window.api.onGameDiagnosticWarning(async (data) => {
+    console.warn('Game Diagnostic Warning received:', data);
+    const confirm = await showCustomConfirm(
+      `${data.message}\n\nWould you like to automatically verify and repair this profile now?`,
+      data.title || 'Game Warning Detected',
+      'warning',
+      'Repair Profile'
+    );
+    if (confirm) {
+      showToast('Repairing profile files and assets...', 'info');
+      const res = await window.api.repairProfile(data.packKey);
+      if (res && res.success) {
+        await showCustomAlert('Profile has been verified and repaired successfully! You can launch the game again.', 'success', 'Repair Complete');
+      } else {
+        await showCustomAlert('Repair encountered an error: ' + (res ? res.error : 'Unknown error'), 'error', 'Repair Failed');
+      }
+    }
+  });
+}
 
 if (packSettingsResetBtn) {
   packSettingsResetBtn.addEventListener('click', async () => {

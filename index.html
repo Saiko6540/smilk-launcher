@@ -179,7 +179,7 @@
 
         <div class="launcher-info">
           <span class="info-label off" id="mode-badge">Production</span>
-          <span class="info-version" id="launcher-version-display">Launcher v1.1.5</span>
+          <span class="info-version" id="launcher-version-display">Launcher v1.1.6</span>
           <span class="info-author">by saiko</span>
         </div>
       </footer>
@@ -299,7 +299,10 @@
             <div class="addon-control-card" style="margin-top: 0; width: 100%; box-sizing: border-box;">
               <div class="form-group row-group" style="margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; flex-direction: row; justify-content: space-between; align-items: center; width: 100%;">
                 <div>
-                  <label id="pack-shaders-title" style="font-size: 13px; font-weight: 600; color: #fff;">Shader Support (Iris / Oculus)</label>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <label id="pack-shaders-title" style="font-size: 13px; font-weight: 600; color: #fff;">Shader Support (Iris / Oculus)</label>
+                    <span id="pack-shaders-builtin-badge" style="display: none; font-size: 10px; background: rgba(44, 214, 59, 0.15); color: #2cd63b; border: 1px solid rgba(44, 214, 59, 0.35); padding: 1px 6px; border-radius: 4px; font-weight: 600;">Already Built-in</span>
+                  </div>
                   <span id="pack-shaders-subtitle" class="form-tip" style="display: block; font-size: 11px; color: rgba(255,255,255,0.4); margin-top: 2px;">Enables shaders. Installs Iris (Fabric) or Oculus (Forge).</span>
                 </div>
                 <label class="switch">
@@ -448,7 +451,8 @@
       </div>
 
       <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 8px;">
+          <button id="pack-settings-repair" class="secondary-btn" style="padding: 8px 12px; font-size: 11px; background: rgba(255,255,255,0.06);" title="Verify game files and repair any missing resources">Verify & Repair</button>
           <button id="pack-settings-reset" class="danger-btn" style="padding: 8px 12px; font-size: 11px;" title="Reset all options of this modpack to default">Reset Options</button>
           <button id="pack-settings-delete" class="danger-btn" style="padding: 8px 12px; font-size: 11px;" title="Delete this modpack completely">Delete Modpack</button>
         </div>

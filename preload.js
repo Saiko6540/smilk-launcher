@@ -32,8 +32,9 @@ contextBridge.exposeInMainWorld('api', {
   deleteShaderpack: (packKey, filename) => ipcRenderer.invoke('delete-shaderpack', packKey, filename),
   readGameOptions: (packKey) => ipcRenderer.invoke('read-game-options', packKey),
   saveGameOptions: (packKey, options) => ipcRenderer.invoke('save-game-options', packKey, options),
+  checkInstalledMods: (packKey) => ipcRenderer.invoke('check-installed-mods', packKey),
+  repairProfile: (packKey) => ipcRenderer.invoke('repair-profile', packKey),
 
-  
   // Event listeners
   onAppUpdateState: (callback) => {
     const listener = (event, data) => callback(data);
@@ -49,5 +50,10 @@ contextBridge.exposeInMainWorld('api', {
     const listener = (event, data) => callback(data);
     ipcRenderer.on('launch-status', listener);
     return () => ipcRenderer.removeListener('launch-status', listener);
+  },
+  onGameDiagnosticWarning: (callback) => {
+    const listener = (event, data) => callback(data);
+    ipcRenderer.on('game-diagnostic-warning', listener);
+    return () => ipcRenderer.removeListener('game-diagnostic-warning', listener);
   }
 });
