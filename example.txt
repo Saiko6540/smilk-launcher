@@ -1,0 +1,81 @@
+# Smilk Launcher v1.1.7 Release Notes
+
+## 🚀 Features (feat)
+- **gpu**: Added cross-platform "Force Discrete GPU" toggle in Launcher Configuration. Enforces high-performance dedicated graphics (NVIDIA / AMD) on Linux via PRIME Render Offload (`__NV_PRIME_RENDER_OFFLOAD=1`, `__GLX_VENDOR_LIBRARY_NAME=nvidia`, `DRI_PRIME=1`, `MESA_VK_DEVICE_SELECT=1`) and on Windows via DirectX Graphics Settings (`HKCU\Software\Microsoft\DirectX\UserGpuPreferences`, `GpuPreference=2;`) and `SHIM_MCCOMPAT`.
+
+## 🐛 Bug Fixes (fix)
+- **ui**: Fixed toggle switch slider overflow in settings modal where long descriptive text compressed the capsule container and pushed the slider circle out of bounds. Added `flex-shrink: 0`, `min-width: 50px`, `box-sizing: border-box`, and proper flex spacing.
+
+---
+
+# Smilk Launcher v1.1.6 Release Notes
+
+## 🚀 Features (feat)
+- **linux**: Added native Linux distribution support including Fedora Linux (RPM), universal standalone AppImage, portable tar.gz, and Flatpak (manifest `com.smilk.launcher.yml`, `.desktop` launcher, and AppStream metadata).
+- **java**: Cross-platform portable Java runtime manager — automatic detection, download, and execution of Adoptium Eclipse Temurin JRE on Linux (tar.gz, executable permissions) and Windows.
+- **ci-cd**: Automated multi-platform GitHub Actions build pipeline targeting Windows (.exe), Fedora (.rpm), and Linux (.AppImage, .tar.gz).
+- **repair**: Added in-app "Verify & Repair" profile verification button in modpack settings to detect and restore corrupted or missing game files, libraries, assets, and mods with SHA-1 integrity checks.
+
+## 🐛 Bug Fixes (fix)
+- **runtime**: Fixed critical Minecraft startup crash (NullPointerException in FancyMenu / DrippyLoadingScreen) caused by working directory mismatch. Set `overrides.cwd` to `instanceDir` so relative path configs (`config/fancymenu/customizablemenus.txt`) resolve accurately.
+- **assets**: Resolved canonical Minecraft asset index (`17` for 1.21.1) preventing missing vanilla resources, sound failures, and gray main menu backgrounds.
+- **performance**: Fixed multi-second launcher freezing when clicking the modpack settings gear icon. Replaced synchronous 210-archive zip scanning with fast candidate filtering and filesystem mtime caching (reduced from ~5000ms to <1ms), and made the settings modal display immediately on click.
+- **shaders**: Prevent duplicate shader mod installations and ensure options.txt / servers.dat settings preservation across launcher updates.
+
+---
+
+# Smilk Launcher v1.1.5 Release Notes
+
+## 🚀 Features (feat)
+- **modpack**: Integrated new "Pluto" active server modpack on Minecraft 1.21.1 with NeoForge 21.1.257, native Iris shaders support, and custom server list integration (servers.dat).
+- **ui**: Replaced circular planet background with high-fidelity cubic voxel planet artwork.
+- **options**: Added automatic preservation and synchronization for client options.txt and multiplayer servers.dat.
+
+---
+
+# Smilk Launcher v1.1.0 Release Notes
+
+## 🚀 Features (feat)
+- **modpack**: Integrated new "Create: New World" (`createnewworld.mrpack`) active server modpack on Minecraft 1.21.1 with NeoForge 21.1.248.
+- **loader**: Full support for headless NeoForge installer execution directly from official NeoForge Maven repositories.
+- **java**: Strict enforcement of Java 21 LTS runtime (Adoptium Eclipse Temurin) for Minecraft 1.21.1 / NeoForge / Cobblemon.
+- **nickname**: Added pre-launch Nickname Guard and realtime auto-save to prevent playing with default "Player" and losing player progress.
+
+## 🐛 Bug Fixes (fix)
+- **jvm**: Fixed modular classpath and access crash on Java 21 (`SecureJarHandler` / `BootstrapLauncher` / `InaccessibleObjectException`) by automatically parsing and injecting `arguments.jvm` flags from version JSONs.
+- **updater**: Fixed loader auto-detection for `.mrpack` files containing NeoForge, Fabric, Forge, and Quilt dependencies.
+
+## ⚡ Performance (perf)
+- **assets**: Optimized asset index verification by setting `assetIndex` overrides, reducing redundant Mojang CDN calls.
+
+---
+
+# Smilk Launcher v1.0.9 Release Notes
+
+## 🚀 Features (feat)
+- **ui**: Implement cycling animated backgrounds for default landing page and rebrand legacy theme.
+- **core**: Expand auto-download list with new rendering, utility, and visual enhancement libraries for the base game profile.
+
+## 🎨 Styling (style)
+- **assets**: Revert the main application icon back to the classic bucket design.
+
+## 🔧 Build & Maintenance (build)
+- **compiler**: Disable native recompilation in the build pipeline to streamline executable generation and bypass external system dependencies.
+
+---
+
+# Smilk Launcher v1.0.8 Release Notes
+
+## 🚀 Features (feat)
+- **core**: Add full architecture support for game version 26.2.
+- **java**: Integrate automatic download and configuration for the Java 25 environment.
+- **loader**: Upgrade system loader to version 0.19.3 for improved stability and game compatibility.
+
+## 🐛 Bug Fixes (fix)
+- **updater**: Fix a critical bug in the core update logic for Vanilla profiles where configurations were ignored or wiped on startup.
+
+## ⚡ Performance (perf)
+- **downloader**: Optimize the dependency checking and download algorithm. The launcher now skips redundant downloads if files already exist, significantly speeding up launch times and saving network bandwidth.
+
+## 🔧 Maintenance (chore)
+- General stability improvements and application performance optimizations.

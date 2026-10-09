@@ -735,9 +735,56 @@ function startLogWatchdog(instanceDir, packKey, sendProgress, proc) {
 }
 
 /**
+ * Registers Java executable in Windows DirectX Graphics settings (HKCU\Software\Microsoft\DirectX\UserGpuPreferences)
+ * GpuPreference=2; forces the discrete/high-performance GPU on Windows 10/11.
+ */
+function applyWindowsGpuPreference(javaExecutablePath, forceDiscrete = true) {
+  if (process.platform !== 'win32' || !javaExecutablePath) return;
+
+  try {
+    let resolvedPaths = [];
+    if (path.isAbsolute(javaExecutablePath) && fs.existsSync(javaExecutablePath)) {
+      resolvedPaths.push(javaExecutablePath);
+    } else {
+      try {
+        const stdout = require('child_process').execSync(`where.exe "${javaExecutablePath}"`, { encoding: 'utf8' });
+        const lines = stdout.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length > 0) resolvedPaths.push(lines[0]);
+      } catch (e) {
+        resolvedPaths.push(javaExecutablePath);
+      }
+    }
+
+    const targets = [];
+    for (const p of resolvedPaths) {
+      targets.push(p);
+      if (p.toLowerCase().endsWith('javaw.exe')) {
+        targets.push(p.replace(/javaw\.exe$/i, 'java.exe'));
+      } else if (p.toLowerCase().endsWith('java.exe')) {
+        targets.push(p.replace(/java\.exe$/i, 'javaw.exe'));
+      }
+    }
+
+    const uniqueTargets = [...new Set(targets)];
+    for (const target of uniqueTargets) {
+      if (forceDiscrete) {
+        exec(`reg add "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences" /v "${target}" /t REG_SZ /d "GpuPreference=2;" /f`, (err) => {
+          if (err) console.warn('[GPU] Failed to register Windows UserGpuPreferences:', err.message);
+          else console.log('[GPU] Registered Windows High-Performance GPU preference for:', target);
+        });
+      } else {
+        exec(`reg delete "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences" /v "${target}" /f`, () => {});
+      }
+    }
+  } catch (err) {
+    console.warn('[GPU] Error applying Windows GPU preference:', err.message);
+  }
+}
+
+/**
  * Launches Minecraft using minecraft-launcher-core with shared game data and canonical assetIndex
  */
-async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, mcVersion, loaderString, sendProgress, packKey = 'default') {
+async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, mcVersion, loaderString, sendProgress, packKey = 'default', forceDiscreteGpu = true) {
   let customVersionId = null;
 
   // Resolve shared game data paths
@@ -911,6 +958,44 @@ async function launchMinecraft(instanceDir, nickname, ramGb, javaPath, jvmArgs, 
         }
       }
     }
+
+    if (forceDiscreteGpu && process.platform === 'win32') {
+      applyWindowsGpuPreference(finalJavaPath, true);
+    }
+
+    // Override startMinecraft to inject discrete GPU environment variables into child process
+    launcher.startMinecraft = (launchArguments) => {
+      const launchEnv = { ...process.env };
+
+      if (forceDiscreteGpu) {
+        // Linux: DRI / Mesa Prime Offload (AMD & Intel)
+        launchEnv.DRI_PRIME = '1';
+        launchEnv.MESA_VK_DEVICE_SELECT = '1';
+
+        // Linux: NVIDIA Prime Render Offload
+        launchEnv.__NV_PRIME_RENDER_OFFLOAD = '1';
+        launchEnv.__GLX_VENDOR_LIBRARY_NAME = 'nvidia';
+        launchEnv.__VK_LAYER_NV_optimus = 'NVIDIA_only';
+
+        // Windows & General OpenGL Optimizations
+        launchEnv.SHIM_MCCOMPAT = '0x80000000';
+        launchEnv.__GL_THREADED_OPTIMIZATIONS = '1';
+
+        console.log('[GPU] Discrete GPU environment variables injected into game process');
+      }
+
+      const spawnOpts = {
+        cwd: launcher.options.overrides.cwd || launcher.options.root,
+        detached: launcher.options.overrides.detached,
+        env: launchEnv
+      };
+
+      const minecraft = spawn(launcher.options.javaPath ? launcher.options.javaPath : 'java', launchArguments, spawnOpts);
+      minecraft.stdout.on('data', (data) => launcher.emit('data', data.toString('utf-8')));
+      minecraft.stderr.on('data', (data) => launcher.emit('data', data.toString('utf-8')));
+      minecraft.on('close', (code) => launcher.emit('close', code));
+      return minecraft;
+    };
 
     sendProgress({ status: 'launching', message: 'Launching modded client...' });
     const proc = await launcher.launch(opts);

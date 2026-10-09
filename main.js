@@ -55,6 +55,7 @@ const defaultSettings = {
   jvmArgs: '-XX:+UseG1GC -XX:+UnlockExperimentalVMOptions -XX:MaxGCPauseMillis=100 -XX:+DisableExplicitGC',
   selectedPack: 'pluto',
   mockMode: false, // Disabled by default for normal production play
+  forceDiscreteGpu: true, // Forces discrete/dedicated GPU on Linux (PRIME) & Windows (DirectX UserGpuPreferences)
   addons: {}
 };
 
@@ -933,7 +934,8 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
       localConfig.minecraft,
       localConfig.loader,
       sendProgress,
-      packKey
+      packKey,
+      settings.forceDiscreteGpu !== false
     );
     return { success: true };
   } catch (err) {

@@ -67,6 +67,7 @@ const settingsJava = document.getElementById('settings-java');
 const browseJavaBtn = document.getElementById('browse-java-btn');
 const settingsArgs = document.getElementById('settings-args');
 const settingsMock = document.getElementById('settings-mock');
+const settingsGpu = document.getElementById('settings-gpu');
 const settingsSaveBtn = document.getElementById('settings-save');
 const settingsResetBtn = document.getElementById('settings-reset-btn');
 const settingsClearBtn = document.getElementById('settings-clear-btn');
@@ -1905,6 +1906,9 @@ async function loadSettings() {
   settingsJava.value = settings.javaPath || '';
   settingsArgs.value = settings.jvmArgs || '';
   settingsMock.checked = settings.mockMode;
+  if (settingsGpu) {
+    settingsGpu.checked = settings.forceDiscreteGpu !== false;
+  }
   
   // Ensure addons object exists
   if (!configSettings.addons) {
@@ -1923,6 +1927,7 @@ async function saveSettingsData() {
     jvmArgs: settingsArgs.value.trim(),
     selectedPack: activePack,
     mockMode: settingsMock.checked,
+    forceDiscreteGpu: settingsGpu ? settingsGpu.checked : true,
     addons: configSettings.addons || {}
   };
 
