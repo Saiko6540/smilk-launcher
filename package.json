@@ -2,6 +2,8 @@
   "name": "smilk-launcher",
   "version": "1.1.6",
   "description": "Custom Minecraft Launcher with dynamic animated themes",
+  "author": "Saiko <maksum2007123@gmail.com>",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -50,7 +52,6 @@
       "packageName": "smilk",
       "artifactName": "smilk-${version}.${arch}.rpm",
       "category": "Amusements/Games",
-      "license": "MIT",
       "synopsis": "Custom Minecraft Launcher"
     },
     "flatpak": {
