@@ -1,3 +1,16 @@
+# Smilk Launcher v1.1.8 Release Notes
+
+## 🚀 Features (feat)
+- **halloween**: Global Halloween seasonal theme and 2.5D atmospheric canvas engine. Includes animated fluttering bats with sinusoids, translucent glowing ghosts, creeping ground fog mist, and will-o'-the-wisp rising embers across all active modpacks.
+- **ui**: Complete spooky glassmorphic UI overhaul. Carved Jack-o'-Lantern bucket logo with candle-flicker animation, fiery magma PLAY button with ember pulse micro-animation, corner spiderwebs with delicate glow, and a glowing `🎃 SPOOKY` title bar badge.
+- **settings**: Calendar auto-detection (activates automatically between Oct 15 and Nov 5) with manual "Halloween Theme 🎃" toggle switch in Launcher Configuration (`settings.json`).
+- **discord-rpc**: Added cosmetic `🎃` prefix to Discord Rich Presence statuses while Halloween mode is active.
+
+## 🎨 Styling & Accessibility (style)
+- **a11y**: Added `@media (prefers-reduced-motion: reduce)` accessibility fallback disabling heavy canvas animations and pulses for reduced-motion preferences.
+
+---
+
 # Smilk Launcher v1.1.7 Release Notes
 
 ## 🚀 Features (feat)

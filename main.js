@@ -26,11 +26,33 @@ function initDiscordRPC() {
   rpc.login({ clientId }).catch(e => console.error('Discord RPC failed:', e.message));
 }
 
+function isHalloweenSeason() {
+  const now = new Date();
+  const month = now.getMonth(); // 9 is October, 10 is November
+  const day = now.getDate();
+  return (month === 9 && day >= 15) || (month === 10 && day <= 5);
+}
+
+function isHalloweenModeEnabled() {
+  try {
+    if (fs.existsSync(settingsPath)) {
+      const data = fs.readFileSync(settingsPath, 'utf8');
+      const s = JSON.parse(data);
+      if (typeof s.halloweenTheme === 'boolean') return s.halloweenTheme;
+    }
+  } catch (e) {}
+  return isHalloweenSeason();
+}
+
 function setDiscordActivity(data) {
   if (!rpc) return;
   try {
+    let details = data.details;
+    if (isHalloweenModeEnabled() && details && !details.startsWith('🎃')) {
+      details = `🎃 ${details}`;
+    }
     rpc.setActivity({
-      details: data.details,
+      details,
       state: data.state,
       startTimestamp,
       largeImageKey: 'icon',
@@ -56,6 +78,7 @@ const defaultSettings = {
   selectedPack: 'pluto',
   mockMode: false, // Disabled by default for normal production play
   forceDiscreteGpu: true, // Forces discrete/dedicated GPU on Linux (PRIME) & Windows (DirectX UserGpuPreferences)
+  halloweenTheme: null, // null = auto-detect by calendar (Oct 15 - Nov 5), true/false = manual override
   addons: {}
 };
 

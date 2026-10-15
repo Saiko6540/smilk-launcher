@@ -68,6 +68,7 @@ const browseJavaBtn = document.getElementById('browse-java-btn');
 const settingsArgs = document.getElementById('settings-args');
 const settingsMock = document.getElementById('settings-mock');
 const settingsGpu = document.getElementById('settings-gpu');
+const settingsHalloween = document.getElementById('settings-halloween');
 const settingsSaveBtn = document.getElementById('settings-save');
 const settingsResetBtn = document.getElementById('settings-reset-btn');
 const settingsClearBtn = document.getElementById('settings-clear-btn');
@@ -221,6 +222,9 @@ let plutoStardust = [];
 let plutoShootingStars = [];
 let plutoGears = [];
 let plutoTime = 0;
+
+// Halloween seasonal theme (scene state lives in `hw`, see the Halloween section)
+let halloweenModeActive = false;
 
 let plutoCachedW = 0;
 let plutoCachedH = 0;
@@ -957,6 +961,895 @@ class Pokeball {
   }
 }
 
+// ============================================================================
+// 🎃 HALLOWEEN — "HOLLOW HARVEST" NIGHT SCENE
+// Replaces the pack scene while Halloween mode is on. Static scenery is
+// pre-rendered into offscreen layers on resize and drawn with mouse parallax;
+// per frame we only blit those layers and move a handful of sprites.
+// Depth: sky 0 → moon/clouds 1 → manor hill 2 → graveyard 3 → foreground 4 → bats/spider 5
+// ============================================================================
+
+const HW_PAD = 48;         // layer overscan so parallax never exposes an edge
+const HW_PARALLAX = 34;    // max horizontal shift (px) of the nearest layer
+const HW_DEPTH = { sky: 0.06, moon: 0.12, clouds: 0.2, far: 0.3, mid: 0.55, near: 0.85, fx: 1 };
+const HW_TITLE_BAR = 32;
+
+const hw = {
+  w: 0, h: 0, t: 0, geo: null,
+  layers: {}, sprites: {},
+  windows: [], lanterns: [], graves: [],
+  bats: [], ghosts: [], wisps: [], clouds: [], twinkles: [],
+  ghostTimer: 240,
+  mouse: { x: 0, y: 0, tx: 0, ty: 0 },
+  reduceMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+};
+
+window.addEventListener('mousemove', (e) => {
+  hw.mouse.tx = (e.clientX / window.innerWidth) * 2 - 1;
+  hw.mouse.ty = (e.clientY / window.innerHeight) * 2 - 1;
+});
+
+// Deterministic RNG so the composition doesn't reshuffle on every resize
+function hwRng(seed) {
+  return function () {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hwCanvas(w, h) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.ceil(w));
+  c.height = Math.max(1, Math.ceil(h));
+  return c;
+}
+
+function hwPixelSprite(rows, palette, px) {
+  const c = hwCanvas(rows[0].length * px, rows.length * px);
+  const g = c.getContext('2d');
+  rows.forEach((row, y) => {
+    for (let x = 0; x < row.length; x++) {
+      const col = palette[row[x]];
+      if (!col) continue;
+      g.fillStyle = col;
+      g.fillRect(x * px, y * px, px, px);
+    }
+  });
+  return c;
+}
+
+function hwGlowSprite(r, rgb, core = 0.45) {
+  const c = hwCanvas(r * 2, r * 2);
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(r, r, 0, r, r, r);
+  grad.addColorStop(0, `rgba(${rgb}, 1)`);
+  grad.addColorStop(0.22, `rgba(${rgb}, ${core})`);
+  grad.addColorStop(1, `rgba(${rgb}, 0)`);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, r * 2, r * 2);
+  return c;
+}
+
+// --- Pixel art -------------------------------------------------------------
+const HW_BAT_FRAMES = [
+  ['X.........X',
+   'XX.......XX',
+   'XXX.X.X.XXX',
+   'XXXXeXeXXXX',
+   '...XXXXX...',
+   '....X.X....'],
+  ['...........',
+   '....X.X....',
+   'XXXXeXeXXXX',
+   '.XXXXXXXXX.',
+   'X..XXXXX..X',
+   '....X.X....'],
+  ['...........',
+   '....X.X....',
+   '...XeXeX...',
+   '.XXXXXXXXX.',
+   'XXX.XXX.XXX',
+   'XX.......XX']
+];
+
+const HW_GHOST_FRAMES = [
+  ['..XXXXX..',
+   '.XXXXXXX.',
+   'XXXXXXXXX',
+   'XX.XXX.XX',
+   'XX.XXX.XX',
+   'XXXXXXXXX',
+   'XXXX.XXXX',
+   'XXXXXXXXX',
+   'XXXXXXXXX',
+   'X.XX.XX.X'],
+  ['..XXXXX..',
+   '.XXXXXXX.',
+   'XXXXXXXXX',
+   'XX.XXX.XX',
+   'XX.XXX.XX',
+   'XXXXXXXXX',
+   'XXXX.XXXX',
+   'XXXXXXXXX',
+   'XXXXXXXXX',
+   '.XX.XX.XX']
+];
+
+const HW_SPIDER = [
+  'X.X...X.X',
+  '.X.XXX.X.',
+  'X.XXXXX.X',
+  '.XXeXeXX.',
+  'X.XXXXX.X',
+  '.X.....X.'
+];
+
+// Carved pumpkin front face, 16x16 — F marks the lit carving
+const HW_PUMPKIN_FACE = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '....F......F....',
+  '...FFF....FFF...',
+  '..FFFFF..FFFFF..',
+  '................',
+  '.......FF.......',
+  '................',
+  '..FFFFFFFFFFFF..',
+  '..FF.FFFFFF.FF..',
+  '....FF....FF....',
+  '................',
+  '................',
+  '................'
+];
+
+function hwBuildSprites() {
+  const s = hw.sprites;
+  // Far bats pick up the sky haze; near bats are pure silhouettes
+  const farBat = { X: '#2c1842', e: '#ff6b3d' };
+  const nearBat = { X: '#05020a', e: '#ff3b1f' };
+  s.bats = {
+    2: HW_BAT_FRAMES.map(f => hwPixelSprite(f, farBat, 2)),
+    3: HW_BAT_FRAMES.map(f => hwPixelSprite(f, nearBat, 3)),
+    4: HW_BAT_FRAMES.map(f => hwPixelSprite(f, nearBat, 4))
+  };
+
+  // Ghosts get their glow baked in once instead of shadowBlur every frame
+  s.ghosts = HW_GHOST_FRAMES.map(f => {
+    const body = hwPixelSprite(f, { X: '#ece8ff' }, 3);
+    const pad = 14;
+    const c = hwCanvas(body.width + pad * 2, body.height + pad * 2);
+    const g = c.getContext('2d');
+    g.shadowColor = 'rgba(170, 140, 255, 0.9)';
+    g.shadowBlur = 12;
+    g.drawImage(body, pad, pad);
+    g.shadowBlur = 0;
+    g.drawImage(body, pad, pad);
+    return c;
+  });
+
+  s.spider = hwPixelSprite(HW_SPIDER, { X: '#05020a', e: '#ff3b1f' }, 2);
+  s.wispGreen = hwGlowSprite(10, '190, 255, 120', 0.35);
+  s.wispOrange = hwGlowSprite(10, '255, 170, 70', 0.35);
+  s.lanternGlow = hwGlowSprite(64, '255, 120, 25', 0.28);
+  s.windowGlow = hwGlowSprite(12, '255, 170, 70', 0.3);
+  s.twinkle = hwGlowSprite(6, '255, 240, 255', 0.5);
+}
+
+// --- Geometry --------------------------------------------------------------
+function hwGeometry(W, H) {
+  const moonR = Math.max(44, Math.min(W, H) * 0.085);
+  return {
+    moonR,
+    moonX: W - Math.max(150, W * 0.14),
+    moonY: HW_TITLE_BAR + H * 0.2,
+    farY: H * 0.61,
+    midY: H * 0.69,
+    nearY: H * 0.775
+  };
+}
+
+function hwFarHill(x, G) {
+  return G.farY - 20 - Math.sin(x * 0.0058 + 1.3) * 16 - Math.sin(x * 0.017) * 6;
+}
+function hwMidHill(x, G) {
+  return G.midY - 10 - Math.sin(x * 0.0075 + 4.1) * 12 - Math.sin(x * 0.021 + 1) * 4;
+}
+function hwNearHill(x, G) {
+  return G.nearY - Math.sin(x * 0.009 + 2.2) * 9 - Math.sin(x * 0.031) * 3;
+}
+
+function hwLayerCanvas(W, H) {
+  const c = hwCanvas(W + HW_PAD * 2, H + HW_PAD * 2);
+  const g = c.getContext('2d');
+  g.translate(HW_PAD, HW_PAD);
+  return { c, g };
+}
+
+function hwFillHill(g, W, H, yFn, color) {
+  g.fillStyle = color;
+  g.beginPath();
+  g.moveTo(-HW_PAD, H + HW_PAD);
+  for (let x = -HW_PAD; x <= W + HW_PAD; x += 6) g.lineTo(x, yFn(x));
+  g.lineTo(W + HW_PAD, H + HW_PAD);
+  g.closePath();
+  g.fill();
+}
+
+// Moon-side rim light along a ridge, fading out away from the moon
+function hwRimLight(g, W, yFn, G, alpha) {
+  for (let x = -HW_PAD; x <= W + HW_PAD; x += 6) {
+    const d = Math.abs(x - G.moonX) / W;
+    const a = alpha * Math.max(0, 1 - d * 1.6);
+    if (a <= 0.005) continue;
+    g.fillStyle = `rgba(255, 170, 120, ${a})`;
+    g.fillRect(x, yFn(x), 6, 1.5);
+  }
+}
+
+// --- Layer: sky ------------------------------------------------------------
+function hwBuildSky(W, H, G, rnd) {
+  const { c, g } = hwLayerCanvas(W, H);
+  const sky = g.createLinearGradient(0, -HW_PAD, 0, G.midY);
+  sky.addColorStop(0, '#04020a');
+  sky.addColorStop(0.42, '#110726');
+  sky.addColorStop(0.78, '#2a0e3e');
+  sky.addColorStop(1, '#5c1f3a');
+  g.fillStyle = sky;
+  g.fillRect(-HW_PAD, -HW_PAD, W + HW_PAD * 2, H + HW_PAD * 2);
+
+  // Ember haze rising off the horizon beneath the moon
+  const haze = g.createRadialGradient(G.moonX - W * 0.1, G.farY, 0, G.moonX - W * 0.1, G.farY, W * 0.75);
+  haze.addColorStop(0, 'rgba(255, 110, 40, 0.42)');
+  haze.addColorStop(0.35, 'rgba(190, 50, 95, 0.18)');
+  haze.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = haze;
+  g.fillRect(-HW_PAD, -HW_PAD, W + HW_PAD * 2, H + HW_PAD * 2);
+
+  for (let i = 0; i < 170; i++) {
+    const x = rnd() * W;
+    const y = HW_TITLE_BAR + rnd() * (G.farY * 0.82);
+    const size = rnd() < 0.88 ? 1 : 2;
+    const a = (0.15 + rnd() * 0.6) * (1 - y / G.farY);
+    g.fillStyle = `rgba(255, 240, 255, ${a})`;
+    g.fillRect(x | 0, y | 0, size, size);
+  }
+  return c;
+}
+
+// --- Moon: square, Minecraft-style, with baked glow ------------------------
+function hwBuildMoon(G, rnd) {
+  const R = G.moonR;
+  const size = R * 9;
+  const c = hwCanvas(size, size);
+  const g = c.getContext('2d');
+  const cx = size / 2;
+
+  const glow = g.createRadialGradient(cx, cx, R * 0.6, cx, cx, size / 2);
+  glow.addColorStop(0, 'rgba(255, 205, 140, 0.9)');
+  glow.addColorStop(0.16, 'rgba(255, 150, 70, 0.4)');
+  glow.addColorStop(0.42, 'rgba(210, 70, 110, 0.12)');
+  glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, size, size);
+
+  const cells = 8;
+  const cell = (R * 2) / cells;
+  const x0 = cx - R;
+  // Soft square halo hugging the disc
+  g.shadowColor = 'rgba(255, 190, 120, 0.95)';
+  g.shadowBlur = R * 0.6;
+  g.fillStyle = '#ffe2b0';
+  g.fillRect(x0, x0, R * 2, R * 2);
+  g.shadowBlur = 0;
+  const palette = ['#ffe9c2', '#fde0b0', '#f9d49c', '#f2c58a'];
+  for (let y = 0; y < cells; y++) {
+    for (let x = 0; x < cells; x++) {
+      let tone = rnd() < 0.7 ? 0 : 1;
+      if (rnd() < 0.12) tone = 2;
+      g.fillStyle = palette[tone];
+      g.fillRect(Math.floor(x0 + x * cell), Math.floor(x0 + y * cell), Math.ceil(cell), Math.ceil(cell));
+    }
+  }
+  // Craters
+  [[1, 1, 2], [5, 2, 1], [2, 5, 1], [5, 5, 2], [3, 3, 1]].forEach(([x, y, s]) => {
+    g.fillStyle = palette[3];
+    g.fillRect(x0 + x * cell, x0 + y * cell, cell * s, cell * s);
+    g.fillStyle = 'rgba(255, 250, 235, 0.55)';
+    g.fillRect(x0 + x * cell, x0 + y * cell, cell * s, Math.max(1, cell * 0.25));
+  });
+  // Shade the side facing away from the light
+  const shade = g.createLinearGradient(x0, x0, x0 + R * 2, x0 + R * 2);
+  shade.addColorStop(0, 'rgba(255, 255, 255, 0.08)');
+  shade.addColorStop(1, 'rgba(180, 70, 40, 0.28)');
+  g.fillStyle = shade;
+  g.fillRect(x0, x0, R * 2, R * 2);
+  return c;
+}
+
+function hwBuildCloud(width, rnd) {
+  // Thin, soft streaks of night cloud with a moonlit upper edge
+  const height = width * 0.22;
+  const c = hwCanvas(width, height);
+  const g = c.getContext('2d');
+  g.filter = 'blur(3px)';
+  for (let i = 0; i < 7; i++) {
+    const cx = width * (0.15 + rnd() * 0.7);
+    const cy = height * (0.45 + rnd() * 0.2);
+    const rx = width * (0.15 + rnd() * 0.2);
+    const ry = height * (0.12 + rnd() * 0.12);
+    g.fillStyle = 'rgba(255, 170, 130, 0.16)';
+    g.beginPath();
+    g.ellipse(cx, cy - 2, rx, ry, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(28, 11, 42, 0.85)';
+    g.beginPath();
+    g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  return c;
+}
+
+// --- Layer: manor hill -----------------------------------------------------
+function hwDrawManor(g, cx, by, k, rnd) {
+  const body = '#13081f';
+  g.fillStyle = body;
+  const rect = (x, y, w, h) => g.fillRect(cx + x * k, by + y * k, w * k, h * k);
+  const tri = (pts) => {
+    g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(cx + x * k, by + y * k) : g.moveTo(cx + x * k, by + y * k)));
+    g.closePath();
+    g.fill();
+  };
+
+  rect(-50, -55, 100, 60);                        // hall
+  tri([[-56, -55], [0, -84], [56, -55]]);          // hall roof
+  rect(-20, -96, 8, 26);                          // chimney
+  rect(-72, -80, 24, 85);                         // west tower
+  tri([[-76, -80], [-60, -116], [-44, -80]]);
+  rect(30, -106, 26, 111);                        // east tower
+  tri([[26, -106], [43, -152], [60, -106]]);
+  rect(42, -160, 2, 10);                          // weather vane
+  rect(39, -156, 8, 2);
+  for (let i = -6; i <= 6; i++) rect(i * 9 - 1, -8, 2, 13); // porch railing posts
+  rect(-56, -8, 112, 2);
+
+  // Rim light on the moon-facing edges
+  g.fillStyle = 'rgba(255, 160, 110, 0.22)';
+  rect(55, -106, 1.2, 111);
+  rect(49, -55, 1.2, 60);
+  rect(-49, -80, 1.2, 25);
+
+  // Windows (lit ones flicker at runtime)
+  const spots = [
+    [-38, -44], [-22, -44], [12, -44], [-38, -24], [12, -24], [-22, -24],
+    [-63, -62], [-63, -38], [-63, -16], [40, -88], [40, -64], [40, -40], [40, -16], [-3, -72]
+  ];
+  const wins = [];
+  spots.forEach(([x, y]) => {
+    const lit = rnd() < 0.62;
+    g.fillStyle = lit ? '#3a1606' : '#0b0414';
+    rect(x, y, 7, 10);
+    if (lit) {
+      wins.push({
+        x: cx + (x + 3.5) * k, y: by + (y + 5) * k, w: 7 * k, h: 10 * k,
+        color: rnd() < 0.12 ? '160, 255, 110' : '255, 170, 70',
+        phase: rnd() * Math.PI * 2, speed: 0.02 + rnd() * 0.05
+      });
+    }
+  });
+  // Door
+  g.fillStyle = '#2a1006';
+  rect(-6, -18, 12, 18);
+  return wins;
+}
+
+function hwBuildFar(W, H, G, rnd) {
+  const { c, g } = hwLayerCanvas(W, H);
+  const yFn = (x) => hwFarHill(x, G);
+  hwFillHill(g, W, H, yFn, '#1b0d2f');
+  hwRimLight(g, W, yFn, G, 0.22);
+
+  const k = G.moonR / 58;
+  const manorX = G.moonX - G.moonR * 0.85;
+  hw.windows = hwDrawManor(g, manorX, yFn(manorX) + 6 * k, k, rnd);
+
+  // Distant pines along the ridge, far from the manor
+  g.fillStyle = '#170a28';
+  for (let x = -HW_PAD; x < W + HW_PAD; x += 14 + rnd() * 30) {
+    if (Math.abs(x - manorX) < G.moonR * 1.8) continue;
+    const base = yFn(x) + 4;
+    const h = 14 + rnd() * 22;
+    g.beginPath();
+    g.moveTo(x - h * 0.28, base);
+    g.lineTo(x, base - h);
+    g.lineTo(x + h * 0.28, base);
+    g.fill();
+  }
+
+  // Aerial perspective: fade the base of the layer into haze
+  const haze = g.createLinearGradient(0, G.farY - 40, 0, G.midY + 20);
+  haze.addColorStop(0, 'rgba(60, 22, 70, 0)');
+  haze.addColorStop(1, 'rgba(60, 22, 70, 0.55)');
+  g.fillStyle = haze;
+  g.fillRect(-HW_PAD, G.farY - 40, W + HW_PAD * 2, H);
+  return c;
+}
+
+// --- Layer: graveyard ------------------------------------------------------
+function hwBranch(g, x, y, len, ang, wid, depth, rnd) {
+  const x2 = x + Math.cos(ang) * len;
+  const y2 = y + Math.sin(ang) * len;
+  const mx = (x + x2) / 2 + (rnd() - 0.5) * len * 0.3;
+  const my = (y + y2) / 2 + (rnd() - 0.5) * len * 0.3;
+  g.lineWidth = wid;
+  g.beginPath();
+  g.moveTo(x, y);
+  g.quadraticCurveTo(mx, my, x2, y2);
+  g.stroke();
+  if (depth <= 0 || wid < 0.7) return;
+  const n = rnd() < 0.3 ? 3 : 2;
+  for (let i = 0; i < n; i++) {
+    const spread = 0.38 + rnd() * 0.42;
+    const a = ang + (i - (n - 1) / 2) * spread + (rnd() - 0.5) * 0.35;
+    hwBranch(g, x2, y2, len * (0.6 + rnd() * 0.2), a, wid * 0.64, depth - 1, rnd);
+  }
+}
+
+function hwDrawTree(g, x, y, height, lean, color, rnd) {
+  g.strokeStyle = color;
+  g.lineCap = 'round';
+  hwBranch(g, x, y, height * 0.38, -Math.PI / 2 + lean, Math.max(3, height * 0.07), 6, rnd);
+}
+
+function hwDrawGrave(g, x, base, w, h, kind) {
+  g.fillStyle = '#1d1430';
+  if (kind === 0) {           // rounded headstone
+    g.beginPath();
+    g.moveTo(x - w / 2, base);
+    g.lineTo(x - w / 2, base - h + w / 2);
+    g.arc(x, base - h + w / 2, w / 2, Math.PI, 0);
+    g.lineTo(x + w / 2, base);
+    g.fill();
+  } else if (kind === 1) {    // cross
+    g.fillRect(x - 2.5, base - h, 5, h);
+    g.fillRect(x - w / 2, base - h * 0.72, w, 5);
+  } else {                    // blocky slab
+    g.fillRect(x - w / 2, base - h, w, h);
+    g.fillRect(x - w / 2 - 2, base - h - 3, w + 4, 4);
+  }
+  // Moonlit edge (moon is to the right)
+  g.fillStyle = 'rgba(255, 180, 140, 0.18)';
+  g.fillRect(x + w / 2 - 1.5, base - h + (kind === 0 ? w / 2 : 0), 1.5, h - (kind === 0 ? w / 2 : 0));
+}
+
+function hwBuildMid(W, H, G, rnd) {
+  const { c, g } = hwLayerCanvas(W, H);
+  const yFn = (x) => hwMidHill(x, G);
+  hwFillHill(g, W, H, yFn, '#0f0619');
+  hwRimLight(g, W, yFn, G, 0.16);
+
+  hwDrawTree(g, W * 0.2, yFn(W * 0.2) + 4, 90, -0.12, '#0f0619', rnd);
+  hwDrawTree(g, W * 0.62, yFn(W * 0.62) + 4, 52, 0.15, '#0f0619', rnd);
+
+  // Wrought-iron fence
+  const f0 = W * 0.3, f1 = W * 0.42;
+  g.fillStyle = '#0a0412';
+  for (let x = f0; x <= f1; x += 7) {
+    const b = yFn(x) + 3;
+    g.fillRect(x, b - 24, 2, 24);
+    g.beginPath();
+    g.moveTo(x - 2, b - 24);
+    g.lineTo(x + 1, b - 30);
+    g.lineTo(x + 4, b - 24);
+    g.fill();
+  }
+  for (let x = f0; x <= f1; x += 2) {
+    g.fillRect(x, yFn(x) - 18, 2, 2);
+    g.fillRect(x, yFn(x) - 6, 2, 2);
+  }
+
+  // Graveyard
+  hw.graves = [];
+  for (let x = W * 0.44; x < W * 0.86; x += 26 + rnd() * 34) {
+    const kind = Math.floor(rnd() * 3);
+    const w = 14 + rnd() * 8;
+    const h = 20 + rnd() * 16;
+    const base = yFn(x) + 4;
+    g.save();
+    g.translate(x, base);
+    g.rotate((rnd() - 0.5) * 0.16);
+    hwDrawGrave(g, 0, 0, w, h, kind);
+    g.restore();
+    hw.graves.push({ x, y: base - h });
+  }
+  return c;
+}
+
+// --- Layer: foreground -----------------------------------------------------
+function hwDrawPumpkin(s, rnd) {
+  // Front face texture (16x16) + 2.5D top and side faces
+  const d = Math.round(s * 0.26);
+  const c = hwCanvas(s + d + 2, s + d + 2);
+  const g = c.getContext('2d');
+  const px = s / 16;
+  const fy = d;
+
+  // Top face
+  g.fillStyle = '#d9771c';
+  g.beginPath();
+  g.moveTo(0, fy); g.lineTo(d, 0); g.lineTo(s + d, 0); g.lineTo(s, fy);
+  g.fill();
+  g.fillStyle = '#4a3010';
+  g.fillRect(s / 2 + d / 2 - px, d * 0.2, px * 2.4, d * 0.6);
+  // Side face
+  g.fillStyle = '#8f400c';
+  g.beginPath();
+  g.moveTo(s, fy); g.lineTo(s + d, 0); g.lineTo(s + d, s); g.lineTo(s, s + fy);
+  g.fill();
+  // Front
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const rib = x === 3 || x === 8 || x === 12;
+      const n = rnd();
+      g.fillStyle = rib ? '#b5560f' : n < 0.18 ? '#d4690f' : n < 0.3 ? '#f08a25' : '#e57a17';
+      g.fillRect(x * px, fy + y * px, Math.ceil(px), Math.ceil(px));
+    }
+  }
+  const face = hwCanvas(s, s);
+  const fg = face.getContext('2d');
+  HW_PUMPKIN_FACE.forEach((row, y) => {
+    for (let x = 0; x < 16; x++) {
+      if (row[x] !== 'F') continue;
+      g.fillStyle = '#ffb020';
+      g.fillRect(x * px, fy + y * px, Math.ceil(px), Math.ceil(px));
+      fg.fillStyle = '#fff3b0';
+      fg.fillRect(x * px, y * px, Math.ceil(px), Math.ceil(px));
+    }
+  });
+  return { body: c, face, d };
+}
+
+function hwBuildNear(W, H, G, rnd) {
+  const { c, g } = hwLayerCanvas(W, H);
+  const yFn = (x) => hwNearHill(x, G);
+  hwFillHill(g, W, H, yFn, '#07030d');
+
+  // Pixel grass tufts along the crest
+  g.fillStyle = '#07030d';
+  for (let x = -HW_PAD; x < W + HW_PAD; x += 3 + rnd() * 5) {
+    const h = 2 + rnd() * 7;
+    g.fillRect(x, yFn(x) - h, 2, h);
+  }
+
+  // Gnarled tree framing the moon from the right edge
+  const tx = W - Math.max(26, W * 0.025);
+  g.strokeStyle = '#06020b';
+  g.lineCap = 'round';
+  hwBranch(g, tx, yFn(tx) + 6, H * 0.2, -Math.PI / 2 - 0.28, Math.max(12, W * 0.013), 7, rnd);
+
+  // Jack-o'-lanterns (drawn live so their glow can flicker)
+  hw.lanterns = [];
+  const spots = [[0.34, 30], [0.39, 22], [0.62, 26], [0.9, 34], [0.08, 28]];
+  const k = Math.min(1.5, Math.max(1, H / 700));
+  spots.forEach(([fx, size]) => {
+    const x = W * fx;
+    const s = Math.round(size * k);
+    const sprite = hwDrawPumpkin(s, rnd);
+    hw.lanterns.push({ x, y: yFn(x) + 3, s, sprite, phase: rnd() * 100 });
+  });
+  return c;
+}
+
+// --- Fog band (tileable horizontally) --------------------------------------
+function hwBuildFog(width, height, rgb, rnd) {
+  const c = hwCanvas(width, height);
+  const g = c.getContext('2d');
+  for (let i = 0; i < 46; i++) {
+    const r = height * (0.35 + rnd() * 0.5);
+    const x = rnd() * width;
+    const y = height * (0.35 + rnd() * 0.35);
+    const a = 0.05 + rnd() * 0.08;
+    [x - width, x, x + width].forEach(bx => {
+      const grad = g.createRadialGradient(bx, y, 0, bx, y, r);
+      grad.addColorStop(0, `rgba(${rgb}, ${a})`);
+      grad.addColorStop(1, `rgba(${rgb}, 0)`);
+      g.fillStyle = grad;
+      g.fillRect(bx - r, y - r, r * 2, r * 2);
+    });
+  }
+  return c;
+}
+
+// --- Actors ----------------------------------------------------------------
+function hwSpawnBat(initial) {
+  const W = hw.w, H = hw.h;
+  const r = Math.random();
+  const px = r < 0.5 ? 2 : r < 0.85 ? 3 : 4;
+  const speed = (px === 2 ? 0.55 : px === 3 ? 1.1 : 1.6) * (0.8 + Math.random() * 0.5);
+  const dir = Math.random() < 0.6 ? -1 : 1;
+  return {
+    px,
+    vx: speed * dir,
+    x: initial ? Math.random() * W : (dir > 0 ? -60 : W + 60),
+    baseY: HW_TITLE_BAR + 30 + Math.random() * H * (px === 2 ? 0.35 : 0.45),
+    amp: 8 + Math.random() * 22,
+    freq: 0.02 + Math.random() * 0.025,
+    phase: Math.random() * Math.PI * 2,
+    flap: Math.random() * 4,
+    flapSpeed: 0.18 + Math.random() * 0.1,
+    y: 0
+  };
+}
+
+function hwSpawnWisp() {
+  const G = hw.geo;
+  return {
+    x: Math.random() * hw.w,
+    y: G.midY - 40 + Math.random() * (G.nearY - G.midY + 30),
+    vx: (Math.random() - 0.5) * 0.25,
+    vy: (Math.random() - 0.5) * 0.15,
+    phase: Math.random() * Math.PI * 2,
+    green: Math.random() < 0.45,
+    scale: 0.5 + Math.random() * 0.7
+  };
+}
+
+function initHalloweenScene() {
+  const W = canvas.width;
+  const H = canvas.height;
+  if (!W || !H) return;
+  hw.w = W;
+  hw.h = H;
+  const G = hw.geo = hwGeometry(W, H);
+  if (!hw.sprites.bats) hwBuildSprites();
+
+  hw.layers.sky = hwBuildSky(W, H, G, hwRng(31));
+  hw.layers.moon = hwBuildMoon(G, hwRng(7));
+  hw.layers.far = hwBuildFar(W, H, G, hwRng(1031));
+  hw.layers.mid = hwBuildMid(W, H, G, hwRng(4242));
+  hw.layers.near = hwBuildNear(W, H, G, hwRng(1337));
+  const fogW = Math.max(900, W);
+  hw.layers.fogFar = hwBuildFog(fogW, 110, '170, 120, 210', hwRng(11));
+  hw.layers.fogMid = hwBuildFog(fogW, 120, '150, 110, 190', hwRng(12));
+  hw.layers.fogNear = hwBuildFog(fogW, 140, '120, 90, 160', hwRng(13));
+
+  const crnd = hwRng(99);
+  // Clouds only drift through the moon's corner of the sky, never across the copy
+  hw.cloudZone = G.moonX - G.moonR * 3.2;
+  hw.clouds = [
+    { sprite: hwBuildCloud(G.moonR * 4, crnd), x: G.moonX - G.moonR * 1.6, y: G.moonY + G.moonR * 0.05, v: 0.1 },
+    { sprite: hwBuildCloud(G.moonR * 2.6, crnd), x: G.moonX + G.moonR * 0.6, y: G.moonY - G.moonR * 1.7, v: 0.06 }
+  ];
+
+  const trnd = hwRng(5);
+  hw.twinkles = Array.from({ length: 16 }, () => ({
+    x: trnd() * W,
+    y: HW_TITLE_BAR + trnd() * G.farY * 0.6,
+    phase: trnd() * Math.PI * 2,
+    speed: 0.01 + trnd() * 0.03
+  }));
+
+  hw.bats = Array.from({ length: 9 }, () => hwSpawnBat(true));
+  hw.wisps = Array.from({ length: 18 }, hwSpawnWisp);
+  hw.ghosts = [];
+}
+
+function hwOffset(depth) {
+  return {
+    x: -hw.mouse.x * HW_PARALLAX * depth,
+    y: -hw.mouse.y * HW_PARALLAX * 0.45 * depth
+  };
+}
+
+function hwBlitLayer(img, depth) {
+  const o = hwOffset(depth);
+  ctx.drawImage(img, -HW_PAD + o.x, -HW_PAD + o.y);
+  return o;
+}
+
+function hwDrawFog(img, y, depth, speed, alpha) {
+  const o = hwOffset(depth);
+  const w = img.width;
+  const shift = ((hw.t * speed) % w + w) % w;
+  ctx.globalAlpha = alpha;
+  for (let x = -shift - HW_PAD; x < hw.w + HW_PAD; x += w) {
+    ctx.drawImage(img, x + o.x, y + o.y - img.height / 2);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function hwDrawBats(filter) {
+  hw.bats.forEach(b => {
+    if (!filter(b)) return;
+    const frames = hw.sprites.bats[b.px];
+    const seq = [0, 1, 2, 1];
+    const img = frames[seq[Math.floor(b.flap) % 4]];
+    const o = hwOffset(b.px === 2 ? HW_DEPTH.clouds : HW_DEPTH.fx);
+    ctx.drawImage(img, Math.round(b.x + o.x - img.width / 2), Math.round(b.y + o.y - img.height / 2));
+  });
+}
+
+function drawHalloweenScene() {
+  if (hw.w !== canvas.width || hw.h !== canvas.height || !hw.geo) initHalloweenScene();
+  if (!hw.geo) return;
+  const W = hw.w, H = hw.h, G = hw.geo;
+  const still = hw.reduceMotion;
+
+  if (!still) {
+    hw.t += 1;
+    hw.mouse.x += (hw.mouse.tx - hw.mouse.x) * 0.04;
+    hw.mouse.y += (hw.mouse.ty - hw.mouse.y) * 0.04;
+  }
+  const t = hw.t;
+
+  // Depth 0 — sky & stars
+  hwBlitLayer(hw.layers.sky, HW_DEPTH.sky);
+  const so = hwOffset(HW_DEPTH.sky);
+  ctx.globalCompositeOperation = 'lighter';
+  hw.twinkles.forEach(s => {
+    const a = 0.25 + 0.75 * Math.max(0, Math.sin(t * s.speed + s.phase));
+    ctx.globalAlpha = a * 0.7;
+    ctx.drawImage(hw.sprites.twinkle, s.x + so.x - 6, s.y + so.y - 6);
+  });
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Depth 1 — moon, clouds, distant bats
+  const mo = hwOffset(HW_DEPTH.moon);
+  const moon = hw.layers.moon;
+  const breathe = still ? 0 : Math.sin(t * 0.004) * 1.5;
+  ctx.drawImage(moon, G.moonX + mo.x - moon.width / 2, G.moonY + mo.y - moon.height / 2 + breathe);
+
+  const co = hwOffset(HW_DEPTH.clouds);
+  hw.clouds.forEach(cl => {
+    if (!still) cl.x -= cl.v;
+    if (cl.x + cl.sprite.width < hw.cloudZone) cl.x = W + HW_PAD;
+    // Fade in from the right edge and out as the cloud reaches the edge of its zone
+    const fadeOut = (cl.x + cl.sprite.width - hw.cloudZone) / 120;
+    const fadeIn = (W + HW_PAD - cl.x) / 120;
+    ctx.globalAlpha = Math.max(0, Math.min(1, fadeOut, fadeIn));
+    ctx.drawImage(cl.sprite, cl.x + co.x, cl.y + co.y);
+  });
+  ctx.globalAlpha = 1;
+
+  if (!still) {
+    hw.bats.forEach((b, i) => {
+      b.x += b.vx;
+      b.flap += b.flapSpeed;
+      b.y = b.baseY + Math.sin(t * b.freq + b.phase) * b.amp;
+      if (b.x < -80 || b.x > W + 80) hw.bats[i] = hwSpawnBat(false);
+    });
+  } else {
+    hw.bats.forEach(b => { b.y = b.baseY; });
+  }
+  hwDrawBats(b => b.px === 2);
+
+  // Depth 2 — manor hill with flickering windows
+  const fo = hwBlitLayer(hw.layers.far, HW_DEPTH.far);
+  hw.windows.forEach(wn => {
+    const flick = still ? 0.8 : 0.65 + 0.35 * Math.sin(t * wn.speed + wn.phase) * Math.sin(t * wn.speed * 2.7);
+    ctx.fillStyle = `rgba(${wn.color}, ${0.55 + flick * 0.45})`;
+    ctx.fillRect(wn.x - wn.w / 2 + fo.x, wn.y - wn.h / 2 + fo.y, wn.w, wn.h);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.25 + flick * 0.35;
+    ctx.drawImage(hw.sprites.windowGlow, wn.x - 12 + fo.x, wn.y - 12 + fo.y);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  });
+  hwDrawFog(hw.layers.fogFar, G.farY - 6, HW_DEPTH.far, 0.12, 0.9);
+
+  // Depth 3 — graveyard + ghosts rising from the graves
+  const midO = hwBlitLayer(hw.layers.mid, HW_DEPTH.mid);
+  if (!still) {
+    hw.ghostTimer -= 1;
+    if (hw.ghostTimer <= 0 && hw.ghosts.length < 2 && hw.graves.length) {
+      const grave = hw.graves[Math.floor(Math.random() * hw.graves.length)];
+      hw.ghosts.push({ x: grave.x, y: grave.y, life: 0, max: 520 + Math.random() * 200, sway: Math.random() * 6 });
+      hw.ghostTimer = 360 + Math.random() * 480;
+    }
+    hw.ghosts = hw.ghosts.filter(gh => {
+      gh.life += 1;
+      gh.y -= 0.14;
+      return gh.life < gh.max;
+    });
+  }
+  hw.ghosts.forEach(gh => {
+    const p = gh.life / gh.max;
+    const a = Math.min(1, p / 0.2) * Math.min(1, (1 - p) / 0.35) * 0.5;
+    const img = hw.sprites.ghosts[Math.floor(gh.life / 14) % 2];
+    const gx = gh.x + Math.sin(gh.life * 0.025 + gh.sway) * 10 + midO.x;
+    ctx.globalAlpha = a;
+    ctx.drawImage(img, gx - img.width / 2, gh.y + midO.y - img.height);
+    ctx.globalAlpha = 1;
+  });
+  hwDrawFog(hw.layers.fogMid, G.midY + 2, HW_DEPTH.mid, 0.22, 0.85);
+
+  // Will-o'-wisps drifting between the graves
+  ctx.globalCompositeOperation = 'lighter';
+  hw.wisps.forEach(w => {
+    if (!still) {
+      w.phase += 0.02;
+      w.x += w.vx + Math.sin(w.phase * 0.7) * 0.15;
+      w.y += w.vy + Math.cos(w.phase) * 0.12;
+      if (w.x < -20) w.x = W + 20;
+      if (w.x > W + 20) w.x = -20;
+      if (w.y < G.midY - 70 || w.y > G.nearY + 20) w.vy = -w.vy;
+    }
+    const a = 0.35 + 0.65 * Math.abs(Math.sin(w.phase));
+    const o = hwOffset(HW_DEPTH.mid + 0.15);
+    const img = w.green ? hw.sprites.wispGreen : hw.sprites.wispOrange;
+    const size = 20 * w.scale;
+    ctx.globalAlpha = a;
+    ctx.drawImage(img, w.x + o.x - size / 2, w.y + o.y - size / 2, size, size);
+  });
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
+
+  // Depth 4 — foreground ridge, tree and jack-o'-lanterns
+  const no = hwBlitLayer(hw.layers.near, HW_DEPTH.near);
+  hw.lanterns.forEach(l => {
+    const n = still ? 0.7 : 0.6 + 0.25 * Math.sin(t * 0.13 + l.phase) + 0.15 * Math.sin(t * 0.37 + l.phase * 2);
+    const { body, face, d } = l.sprite;
+    const bx = l.x + no.x - l.s / 2;
+    const by = l.y + no.y - l.s - d;
+    const glowR = l.s * 2.6;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.28 + n * 0.3;
+    ctx.drawImage(hw.sprites.lanternGlow, l.x + no.x - glowR, l.y + no.y - l.s * 0.6 - glowR, glowR * 2, glowR * 2);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.drawImage(body, bx, by);
+    ctx.globalAlpha = n * 0.85;
+    ctx.drawImage(face, bx, by + d);
+    ctx.globalAlpha = 1;
+  });
+  hwDrawFog(hw.layers.fogNear, G.nearY + 18, HW_DEPTH.near, 0.4, 0.7);
+
+  // Depth 5 — near bats and a spider dangling in front of the moon
+  hwDrawBats(b => b.px !== 2);
+  const xo = hwOffset(HW_DEPTH.fx);
+  const sx = G.moonX - G.moonR * 1.55 + xo.x;
+  const drop = still ? 0.5 : (Math.sin(t * 0.006) + 1) / 2;
+  const sy = HW_TITLE_BAR + 30 + drop * 70 + xo.y;
+  const sway = still ? 0 : Math.sin(t * 0.02) * 2;
+  ctx.strokeStyle = 'rgba(225, 215, 255, 0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(sx, HW_TITLE_BAR);
+  ctx.lineTo(sx + sway, sy);
+  ctx.stroke();
+  const sp = hw.sprites.spider;
+  ctx.drawImage(sp, Math.round(sx + sway - sp.width / 2), Math.round(sy));
+}
+
+function isHalloweenSeason() {
+  const now = new Date();
+  const month = now.getMonth(); // 9 = October, 10 = November
+  const day = now.getDate();
+  return (month === 9 && day >= 15) || (month === 10 && day <= 5);
+}
+
+// `halloweenTheme` is a manual override; null/undefined follows the calendar
+function isHalloweenActive(themeSetting) {
+  return typeof themeSetting === 'boolean' ? themeSetting : isHalloweenSeason();
+}
+
+// Only persist an override when it disagrees with the calendar, so the theme
+// still switches itself off after the season for people who left it on.
+function halloweenSettingFor(checked) {
+  return checked === isHalloweenSeason() ? null : checked;
+}
+
+function setHalloweenMode(enabled) {
+  halloweenModeActive = !!enabled;
+  document.body.classList.toggle('halloween-mode', halloweenModeActive);
+  if (halloweenModeActive && !hw.geo) initHalloweenScene();
+}
+
 // Generate Particles
 function initParticles() {
   bubbles = [];
@@ -1028,7 +1921,10 @@ function animate() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (activeTheme === 'theme-stranded') {
+  // Halloween replaces the pack scene entirely rather than layering on top of it
+  if (halloweenModeActive) {
+    drawHalloweenScene();
+  } else if (activeTheme === 'theme-stranded') {
     drawOceanScene();
   } else if (activeTheme === 'theme-cobblemon') {
     drawPokemonScene();
@@ -1910,6 +2806,13 @@ async function loadSettings() {
     settingsGpu.checked = settings.forceDiscreteGpu !== false;
   }
   
+  // Halloween Season Mode
+  const isHalloween = isHalloweenActive(settings.halloweenTheme);
+  if (settingsHalloween) {
+    settingsHalloween.checked = isHalloween;
+  }
+  setHalloweenMode(isHalloween);
+
   // Ensure addons object exists
   if (!configSettings.addons) {
     configSettings.addons = {};
@@ -1928,12 +2831,14 @@ async function saveSettingsData() {
     selectedPack: activePack,
     mockMode: settingsMock.checked,
     forceDiscreteGpu: settingsGpu ? settingsGpu.checked : true,
+    halloweenTheme: settingsHalloween ? halloweenSettingFor(settingsHalloween.checked) : (configSettings.halloweenTheme ?? null),
     addons: configSettings.addons || {}
   };
 
   const res = await window.api.saveSettings(settings);
   if (res.success) {
     configSettings = settings;
+    setHalloweenMode(isHalloweenActive(settings.halloweenTheme));
     // sync visual inputs
     usernameInput.value = settings.nickname;
     updateUserAvatar(settings.nickname);
@@ -2047,6 +2952,16 @@ browseJavaBtn.addEventListener('click', async () => {
 });
 
 settingsSaveBtn.addEventListener('click', saveSettingsData);
+
+if (settingsHalloween) {
+  settingsHalloween.addEventListener('change', (e) => {
+    setHalloweenMode(e.target.checked);
+    if (configSettings) {
+      configSettings.halloweenTheme = halloweenSettingFor(e.target.checked);
+      window.api.saveSettings(configSettings).catch(err => console.warn('Failed to save Halloween setting:', err));
+    }
+  });
+}
 
 settingsResetBtn.addEventListener('click', async () => {
   if (await showCustomConfirm('Are you sure you want to reset all launcher settings to default?', 'Reset Settings', 'warning', 'Reset')) {

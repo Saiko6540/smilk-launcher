@@ -16,6 +16,28 @@
   <canvas id="animation-canvas"></canvas>
   <div class="backdrop-glow"></div>
 
+  <!-- Pixel jack-o'-lantern (16x16), reused by the logo and title-bar badge -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="pixel-pumpkin" viewBox="0 0 16 16" shape-rendering="crispEdges">
+      <rect x="7" y="0" width="2" height="3" fill="#4d7c0f"/>
+      <rect x="9" y="1" width="2" height="1" fill="#65a30d"/>
+      <rect x="3" y="2" width="10" height="1" fill="#ea580c"/>
+      <rect x="1" y="3" width="14" height="10" fill="#f97316"/>
+      <rect x="2" y="13" width="12" height="1" fill="#c2410c"/>
+      <rect x="4" y="14" width="8" height="1" fill="#9a3412"/>
+      <rect x="5" y="3" width="1" height="10" fill="#ea580c"/>
+      <rect x="10" y="3" width="1" height="10" fill="#ea580c"/>
+      <rect x="1" y="11" width="14" height="2" fill="#ea580c"/>
+      <g class="pumpkin-face" fill="#fde047">
+        <rect x="4" y="4" width="1" height="1"/><rect x="3" y="5" width="3" height="2"/>
+        <rect x="11" y="4" width="1" height="1"/><rect x="10" y="5" width="3" height="2"/>
+        <rect x="7" y="8" width="2" height="1"/>
+        <rect x="3" y="10" width="10" height="1"/>
+        <rect x="4" y="11" width="2" height="1"/><rect x="7" y="11" width="2" height="1"/><rect x="10" y="11" width="2" height="1"/>
+      </g>
+    </symbol>
+  </svg>
+
   <!-- Mandatory Launcher Update Overlay -->
   <div class="modal-overlay hidden" id="launcher-update-overlay" style="z-index: 10000; background: rgba(10,10,12,0.95); backdrop-filter: blur(20px);">
     <div class="modal" style="text-align: center; max-width: 450px;">
@@ -40,6 +62,7 @@
     <div class="title-bar-drag-area">
       <img src="icon.png" class="title-logo-img" alt="logo">
       <span class="title-text">smilk</span>
+      <span class="halloween-badge" aria-hidden="true"><svg class="badge-pumpkin"><use href="#pixel-pumpkin"/></svg>Halloween</span>
     </div>
     <div class="title-bar-controls">
       <button id="win-minimize" class="control-btn" title="Minimize">—</button>
@@ -52,7 +75,12 @@
     <!-- Left Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <div class="logo-icon"><img src="bucket.png" alt="bucket" style="width: 32px; height: 32px; image-rendering: pixelated; vertical-align: middle;"></div>
+        <div class="logo-icon">
+          <div class="bucket-container">
+            <img src="bucket.png" alt="bucket" class="bucket-img">
+            <svg class="logo-pumpkin" aria-hidden="true"><use href="#pixel-pumpkin"/></svg>
+          </div>
+        </div>
         <div class="brand">
           <span class="brand-main">smilk</span>
           <span id="app-version-display" style="font-size: 0.6rem; color: rgba(255,255,255,0.4); margin-left: 5px; vertical-align: bottom;"></span>
@@ -179,7 +207,7 @@
 
         <div class="launcher-info">
           <span class="info-label off" id="mode-badge">Production</span>
-          <span class="info-version" id="launcher-version-display">Launcher v1.1.7</span>
+          <span class="info-version" id="launcher-version-display">Launcher v1.1.8</span>
           <span class="info-author">by saiko</span>
         </div>
       </footer>
@@ -247,6 +275,18 @@
           </div>
           <label class="switch">
             <input type="checkbox" id="settings-gpu" checked>
+            <span class="slider-switch"></span>
+          </label>
+        </div>
+
+        <!-- Halloween Season Theme Toggle -->
+        <div class="form-group row-group">
+          <div>
+            <label for="settings-halloween">Halloween Theme 🎃</label>
+            <span class="form-tip">Haunted night scene with a harvest moon, bats and jack-o'-lanterns. Turns on by itself from Oct 15 to Nov 5.</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="settings-halloween">
             <span class="slider-switch"></span>
           </label>
         </div>
