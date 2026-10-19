@@ -279,10 +279,134 @@ function getPackBuiltinModsInfo(instanceDir) {
   return result;
 }
 
+/**
+ * Fast synchronous integrity check for an instance's mods and managed files.
+ * Returns {
+ *   intact: boolean,
+ *   missingCount: number,
+ *   reason?: 'not_installed' | 'mods_dir_missing' | 'mods_dir_unreadable' | 'no_mods_in_dir' | 'managed_mods_missing' | 'mrpack_mods_missing',
+ *   details?: string,
+ *   totalModsCount?: number,
+ *   missingFiles?: string[]
+ * }
+ */
+function checkModpackIntegrity(instanceDir) {
+  const localVersionFile = path.join(instanceDir, 'local_version.json');
+  if (!fs.existsSync(localVersionFile)) {
+    return { intact: false, missingCount: 0, reason: 'not_installed' };
+  }
+
+  const modsDir = path.join(instanceDir, 'mods');
+  if (!fs.existsSync(modsDir)) {
+    return {
+      intact: false,
+      missingCount: 1,
+      reason: 'mods_dir_missing',
+      details: 'Mods directory does not exist'
+    };
+  }
+
+  let modEntries = [];
+  try {
+    modEntries = fs.readdirSync(modsDir);
+  } catch (e) {
+    return {
+      intact: false,
+      missingCount: 1,
+      reason: 'mods_dir_unreadable',
+      details: e.message
+    };
+  }
+
+  const jarFiles = modEntries.filter(f => f.toLowerCase().endsWith('.jar'));
+  if (jarFiles.length === 0) {
+    return {
+      intact: false,
+      missingCount: 1,
+      reason: 'no_mods_in_dir',
+      details: 'No .jar files found in mods directory'
+    };
+  }
+
+  // 1. Check against managed_files.json manifest if available
+  const managedManifestPath = path.join(instanceDir, 'managed_files.json');
+  if (fs.existsSync(managedManifestPath)) {
+    try {
+      const manifestData = JSON.parse(fs.readFileSync(managedManifestPath, 'utf8'));
+      if (Array.isArray(manifestData.files) && manifestData.files.length > 0) {
+        let missingCount = 0;
+        const missingList = [];
+        for (const relPath of manifestData.files) {
+          const normalized = (relPath || '').replace(/\\/g, '/');
+          if (normalized.startsWith('mods/')) {
+            const fullPath = path.join(instanceDir, normalized);
+            if (!fs.existsSync(fullPath)) {
+              missingCount++;
+              if (missingList.length < 5) missingList.push(path.basename(normalized));
+            }
+          }
+        }
+        if (missingCount > 0) {
+          return {
+            intact: false,
+            missingCount,
+            reason: 'managed_mods_missing',
+            details: `${missingCount} mod file(s) missing from managed manifest: ${missingList.join(', ')}${missingCount > 5 ? '...' : ''}`,
+            missingFiles: missingList,
+            totalModsCount: jarFiles.length
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse managed_files.json in checkModpackIntegrity:', e.message);
+    }
+  }
+
+  // 2. Fallback: Check pack.mrpack index if managed_files.json is missing
+  const mrpackPath = path.join(instanceDir, 'pack.mrpack');
+  if (!fs.existsSync(managedManifestPath) && fs.existsSync(mrpackPath)) {
+    try {
+      const zip = new AdmZip(mrpackPath);
+      const indexEntry = zip.getEntry('modrinth.index.json');
+      if (indexEntry) {
+        const indexJson = JSON.parse(zip.readAsText(indexEntry));
+        const files = indexJson.files || [];
+        let missingCount = 0;
+        const missingList = [];
+        for (const f of files) {
+          const normalized = (f.path || '').replace(/\\/g, '/');
+          if (normalized.startsWith('mods/')) {
+            const fullPath = path.join(instanceDir, normalized);
+            if (!fs.existsSync(fullPath)) {
+              missingCount++;
+              if (missingList.length < 5) missingList.push(path.basename(normalized));
+            }
+          }
+        }
+        if (missingCount > 0) {
+          return {
+            intact: false,
+            missingCount,
+            reason: 'mrpack_mods_missing',
+            details: `${missingCount} mod file(s) missing from .mrpack index: ${missingList.join(', ')}${missingCount > 5 ? '...' : ''}`,
+            missingFiles: missingList,
+            totalModsCount: jarFiles.length
+          };
+        }
+      }
+    } catch (e) {
+      // Ignore fallback index errors
+    }
+  }
+
+  return { intact: true, missingCount: 0, totalModsCount: jarFiles.length };
+}
+
 module.exports = {
   getJarModInfo,
   scanModsDirectory,
   hasModId,
   getPackBuiltinModsInfo,
-  getFileSha1
+  getFileSha1,
+  checkModpackIntegrity
 };
