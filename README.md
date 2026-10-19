@@ -1,6 +1,6 @@
 # smilk launcher 🥛🧊
 
-[![Version](https://img.shields.io/badge/Version-v1.1.8-FF9800?style=for-the-badge&logo=rocket&logoColor=white)](#)
+[![Version](https://img.shields.io/badge/Version-v1.1.9-FF9800?style=for-the-badge&logo=rocket&logoColor=white)](#)
 [![Electron](https://img.shields.io/badge/Electron-v31.7.7-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://electronjs.org/)
 [![NodeJS](https://img.shields.io/badge/Node.js-v20.18-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1%20%7C%201.21.1-12821C?style=for-the-badge&logo=minecraft&logoColor=white)](https://minecraft.net/)
