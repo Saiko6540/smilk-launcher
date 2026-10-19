@@ -147,4 +147,6 @@ deploy/
 scratch/
 catalog_debug.log
 *.log
+example.txt
+exmple.txt
 
