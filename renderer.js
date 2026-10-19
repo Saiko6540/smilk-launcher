@@ -2730,6 +2730,20 @@ async function updateVersionCheck() {
       if (launcherState === 'ready' || launcherState === 'error') {
         btnText.textContent = 'INSTALL';
       }
+    } else if (info.modsMissing) {
+      let displayVer = '';
+      if (info.packVersion) {
+        displayVer = `v${info.packVersion}`;
+      } else if (info.commitMessage) {
+        displayVer = info.commitMessage;
+      } else {
+        displayVer = `v${info.localVersion.substring(0, 7)}`;
+      }
+      statLocalVerEl.textContent = `${displayVer} (Missing Mods)`;
+      if (info.mcVersion) statMcVerEl.textContent = info.mcVersion;
+      if (launcherState === 'ready' || launcherState === 'error') {
+        btnText.textContent = 'RESTORE & PLAY';
+      }
     } else {
       let displayVer = '';
       if (info.packVersion) {
@@ -3805,7 +3819,7 @@ playBtn.addEventListener('click', async () => {
     launcherState = 'error';
     playBtn.disabled = false;
     progressContainer.classList.add('hidden');
-    btnText.textContent = 'PLAY';
+    await updateVersionCheck();
     
     // Open debug console on error only if in Developer Mode (mockMode)
     if (configSettings.mockMode) {

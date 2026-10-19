@@ -4,7 +4,7 @@ const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
-const { hasModId, scanModsDirectory, getFileSha1 } = require('./mod-helper');
+const { hasModId, scanModsDirectory, getFileSha1, checkModpackIntegrity } = require('./mod-helper');
 
 /**
  * Helper to download a file with progress tracking, redirect following, and robust error handling
@@ -157,6 +157,100 @@ async function asyncQueue(tasks, limit, onProgress) {
   return Promise.all(results);
 }
 
+const branchCache = new Map(); // key -> { timestamp, data }
+
+/**
+ * Dynamically resolves any .mrpack file on a GitHub branch without hardcoding filenames
+ * and without hitting api.github.com rate limits (using rate-limit-free HTML tree and Atom feeds).
+ */
+async function resolveGitHubBranchModpack(owner, repo, branch) {
+  const cacheKey = `${owner}/${repo}/${branch}`;
+  const cached = branchCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && (now - cached.timestamp < 60000)) {
+    return cached.data;
+  }
+
+  const safeBranch = encodeURIComponent(decodeURIComponent(branch));
+  const treeUrl = `https://github.com/${owner}/${repo}/tree/${safeBranch}`;
+  const atomUrl = `https://github.com/${owner}/${repo}/commits/${safeBranch}.atom`;
+
+  const fetchHttp = (url) => {
+    return new Promise((resolve, reject) => {
+      https.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 smilk-launcher',
+          'Accept': '*/*'
+        }
+      }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          fetchHttp(res.headers.location).then(resolve).catch(reject);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          resolve({ status: res.statusCode, data: '' });
+          return;
+        }
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve({ status: res.statusCode, data }));
+      }).on('error', reject);
+    });
+  };
+
+  const [treeRes, atomRes] = await Promise.allSettled([
+    fetchHttp(treeUrl),
+    fetchHttp(atomUrl)
+  ]);
+
+  let foundMrpack = null;
+  let foundOptions = false;
+  let foundServers = false;
+
+  if (treeRes.status === 'fulfilled' && treeRes.value && treeRes.value.data) {
+    const html = treeRes.value.data;
+    // 1. Look for href="/owner/repo/blob/branch/filename.mrpack"
+    const hrefRegex = new RegExp(`href=["']\\/${owner}\\/${repo}\\/blob\\/[^"']+\\/([^"']+\\.mrpack)["']`, 'i');
+    const hrefMatch = html.match(hrefRegex) || html.match(/href=["']\/[^\/]+\/[^\/]+\/blob\/[^"']+\/([^"']+\.mrpack)["']/i);
+    // 2. Look for JSON embedded path: "path":"filename.mrpack"
+    const jsonMatch = html.match(/"path"\s*:\s*"([^"]+\.mrpack)"/i);
+
+    if (hrefMatch) {
+      foundMrpack = decodeURIComponent(hrefMatch[1]);
+    } else if (jsonMatch) {
+      foundMrpack = jsonMatch[1];
+    }
+
+    foundOptions = /href=["']\/[^\/]+\/[^\/]+\/blob\/[^"']+\/options\.txt["']/i.test(html) || /"path"\s*:\s*"options\.txt"/i.test(html);
+    foundServers = /href=["']\/[^\/]+\/[^\/]+\/blob\/[^"']+\/servers\.dat["']/i.test(html) || /"path"\s*:\s*"servers\.dat"/i.test(html);
+  }
+
+  let commitMessage = null;
+  let commitHash = null;
+  if (atomRes.status === 'fulfilled' && atomRes.value && atomRes.value.data) {
+    const atomXml = atomRes.value.data;
+    const entryMatch = atomXml.match(/<entry>[\s\S]*?<title>([\s\S]*?)<\/title>/i);
+    if (entryMatch) {
+      commitMessage = entryMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim();
+    }
+    const hashMatch = atomXml.match(/Commit\/([a-f0-9]{40})/i);
+    if (hashMatch) {
+      commitHash = hashMatch[1];
+    }
+  }
+
+  const result = {
+    foundMrpack,
+    foundOptions,
+    foundServers,
+    commitMessage,
+    commitHash
+  };
+
+  branchCache.set(cacheKey, { timestamp: now, data: result });
+  return result;
+}
+
 /**
  * Main update routine
  */
@@ -207,10 +301,23 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   }
   // --------------------------------
 
+  // Read local version upfront
+  const localVersionFile = path.join(instanceDir, 'local_version.json');
+  let localConfig = null;
+  if (fs.existsSync(localVersionFile)) {
+    try {
+      localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
+    } catch (e) {
+      console.warn('Failed to parse local version file, forcing update.');
+    }
+  }
+
   let remoteConfig;
 
   let branchOptionsUrl = null;
   let branchServersUrl = null;
+  let resolvedCommitMessage = null;
+  let resolvedCommitHash = null;
 
   // Dynamic Auto-resolve for any GitHub URL (branch/tree/raw) to find whatever .mrpack file exists on that branch
   const ghMatch = configUrl.match(/(?:github\.com\/([^\/]+)\/([^\/]+)\/(?:tree|raw)\/([^\/]+))|(?:raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+))/);
@@ -220,40 +327,43 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
       const repo = ghMatch[2] || ghMatch[5];
       const branch = ghMatch[3] || ghMatch[6];
       if (owner && repo && branch) {
-        const safeBranch = encodeURIComponent(decodeURIComponent(branch));
-        const treeUrl = `https://api.github.com/repos/${owner}/${repo}/git/trees/${safeBranch}?recursive=1`;
-        
-        const treeRes = await new Promise((resolve, reject) => {
-          https.get(treeUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-              try { resolve(JSON.parse(data)); } catch(e) { resolve(null); }
-            });
-          }).on('error', () => resolve(null));
-        });
-        
-        if (treeRes && treeRes.tree && Array.isArray(treeRes.tree)) {
-          const mrpackFile = treeRes.tree.find(f => f.path.toLowerCase().endsWith('.mrpack'));
-          if (mrpackFile) {
-            configUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${mrpackFile.path.split('/').map(encodeURIComponent).join('/')}`;
-            console.log(`Auto-resolved branch '${branch}' .mrpack file to: ${configUrl}`);
-          }
-          if (treeRes.tree.some(f => f.path.toLowerCase() === 'options.txt')) {
-            branchOptionsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/options.txt`;
-          }
-          if (treeRes.tree.some(f => f.path.toLowerCase() === 'servers.dat')) {
-            branchServersUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/servers.dat`;
-          }
+        const resolved = await resolveGitHubBranchModpack(owner, repo, branch);
+        if (resolved.foundMrpack) {
+          configUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${resolved.foundMrpack.split('/').map(encodeURIComponent).join('/')}`;
+          console.log(`Auto-resolved branch '${branch}' .mrpack file to: ${configUrl}`);
         } else {
+          throw new Error(`No .mrpack file found in GitHub repository ${owner}/${repo} on branch '${branch}'.`);
+        }
+        if (resolved.foundOptions) {
           branchOptionsUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/options.txt`;
+        }
+        if (resolved.foundServers) {
           branchServersUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/servers.dat`;
+        }
+        if (resolved.commitMessage) {
+          resolvedCommitMessage = resolved.commitMessage;
+        }
+        if (resolved.commitHash) {
+          resolvedCommitHash = resolved.commitHash;
         }
       }
     } catch (err) {
-      console.warn("Failed to auto-resolve branch URL for .mrpack file:", err);
+      console.warn("Failed to auto-resolve branch URL for .mrpack file:", err.message);
+      // Offline fallback: If local files are intact, allow playing offline!
+      if (localConfig) {
+        const offlineIntegrity = checkModpackIntegrity(instanceDir);
+        if (offlineIntegrity.intact) {
+          console.log(`[Offline Mode] Network unavailable but modpack files are intact for ${packKey}. Ready to play offline.`);
+          sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)}) [Offline]`, config: localConfig });
+          return localConfig;
+        } else {
+          throw new Error('Modpack files are missing or deleted. Please connect to the internet to download and restore mods.');
+        }
+      }
+      throw err;
     }
   }
+
   if (configUrl.split('?')[0].endsWith('.mrpack')) {
     try {
       if (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com')) {
@@ -266,27 +376,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
           }).on('error', reject);
         });
         const match = text.match(/oid sha256:([a-f0-9]+)/);
-        let commitMessage = null;
-        const repoMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)/);
-        if (repoMatch) {
-          const [_, owner, repo, branch, filepath] = repoMatch;
-          const safeBranch = encodeURIComponent(decodeURIComponent(branch));
-          const safePath = encodeURIComponent(decodeURIComponent(filepath));
-          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${safePath}&sha=${safeBranch}&page=1&per_page=1`;
-          try {
-            const apiText = await new Promise((resolve, reject) => {
-              https.get(apiUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => resolve(data));
-              }).on('error', reject);
-            });
-            const json = JSON.parse(apiText);
-            if (json && json.length > 0 && json[0].commit) {
-              commitMessage = json[0].commit.message;
-            }
-          } catch(e) {}
-        }
+        let commitMessage = resolvedCommitMessage;
 
         let actualDownloadUrl = configUrl;
         if (match) {
@@ -299,7 +389,7 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         }
         
         remoteConfig = {
-          version: match ? match[1] : 'github-raw-' + Date.now(),
+          version: match ? match[1] : (resolvedCommitHash || ('github-raw-' + Date.now())),
           commitMessage,
           mrpack_url: actualDownloadUrl
         };
@@ -310,7 +400,18 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
         };
       }
     } catch (err) {
-      console.warn('Failed to fetch github mrpack info, forcing update.', err);
+      console.warn('Failed to fetch github mrpack info, evaluating offline status:', err);
+      if (localConfig) {
+        const offlineIntegrity = checkModpackIntegrity(instanceDir);
+        if (offlineIntegrity.intact) {
+          console.log(`[Offline Mode] Network unavailable but modpack files are intact for ${packKey}. Ready to play offline.`);
+          sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)}) [Offline]`, config: localConfig });
+          return localConfig;
+        } else {
+          console.error(`[Offline Mode] Network unavailable and modpack files are missing (${offlineIntegrity.details || offlineIntegrity.reason})`);
+          throw new Error('Modpack files are missing or deleted. Please connect to the internet to download and restore mods.');
+        }
+      }
       remoteConfig = { version: 'github-raw-' + Date.now(), mrpack_url: configUrl };
     }
   } else {
@@ -318,6 +419,16 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
       remoteConfig = await fetchJson(configUrl);
     } catch (err) {
       console.error('Update check failed:', err);
+      if (localConfig) {
+        const offlineIntegrity = checkModpackIntegrity(instanceDir);
+        if (offlineIntegrity.intact) {
+          console.log(`[Offline Mode] Network unavailable but modpack files are intact for ${packKey}. Ready to play offline.`);
+          sendProgress({ status: 'ready', message: `Ready to play (v${localConfig.packVersion || localConfig.version.substring(0, 7)}) [Offline]`, config: localConfig });
+          return localConfig;
+        } else {
+          throw new Error('Modpack files are missing or deleted. Please connect to the internet to download and restore mods.');
+        }
+      }
       throw new Error('Unable to connect to updates server. Please verify your internet connection.');
     }
   }
@@ -325,17 +436,6 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   if (remoteConfig) {
     remoteConfig.branchOptionsUrl = branchOptionsUrl;
     remoteConfig.branchServersUrl = branchServersUrl;
-  }
-
-  // Get local version
-  const localVersionFile = path.join(instanceDir, 'local_version.json');
-  let localConfig = null;
-  if (fs.existsSync(localVersionFile)) {
-    try {
-      localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
-    } catch (e) {
-      console.warn('Failed to parse local version file, forcing update.');
-    }
   }
 
   // Compare version and addons state
@@ -360,7 +460,16 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
       console.log(`Retroactively updated local config metadata for ${packKey}`);
     }
 
-    if (localShaders === targetShaders) {
+    // Fast integrity verification for mods before declaring up to date!
+    const integrity = checkModpackIntegrity(instanceDir);
+    if (!integrity.intact && integrity.reason !== 'not_installed') {
+      console.warn(`[Updater] Mod integrity check failed for ${packKey} (${integrity.details || integrity.reason}). Missing ${integrity.missingCount} file(s). Restoring modpack...`);
+      sendProgress({
+        status: 'checking',
+        message: `Missing mod files detected (${integrity.missingCount})! Restoring modpack...`
+      });
+      // Do NOT return early! Let updater proceed to restore missing files.
+    } else if (localShaders === targetShaders) {
       // Sync missing servers.dat or options.txt if provided on branch
       if (remoteConfig.branchServersUrl && !fs.existsSync(path.join(instanceDir, 'servers.dat'))) {
         try {
@@ -491,22 +600,43 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   console.log(`Update found. Local: ${localConfig ? localConfig.version : 'none'}, Remote: ${remoteConfig.version}`);
   fs.mkdirSync(instanceDir, { recursive: true });
 
-  // 2. Download mrpack
+  // 2. Download mrpack (reuse cached mrpack only if versions match and archive is valid)
   const mrpackPath = path.join(instanceDir, 'pack.mrpack');
-  sendProgress({ status: 'downloading_pack', message: 'Downloading modpack manifest...', progress: 0 });
+  let zip = null;
+  if (localConfig && localConfig.version === remoteConfig.version && fs.existsSync(mrpackPath)) {
+    try {
+      zip = new AdmZip(mrpackPath);
+      if (!zip.getEntry('modrinth.index.json')) {
+        zip = null;
+      }
+    } catch (e) {
+      zip = null;
+    }
+  }
 
-  await downloadFile(remoteConfig.mrpack_url, mrpackPath, (bytes, total) => {
-    const percent = Math.round((bytes / total) * 100);
-    sendProgress({ status: 'downloading_pack', message: `Downloading modpack manifest (${percent}%)`, progress: percent });
-  });
+  if (!zip) {
+    sendProgress({ status: 'downloading_pack', message: 'Downloading modpack manifest...', progress: 0 });
+
+    await downloadFile(remoteConfig.mrpack_url, mrpackPath, (bytes, total) => {
+      const percent = Math.round((bytes / total) * 100);
+      sendProgress({ status: 'downloading_pack', message: `Downloading modpack manifest (${percent}%)`, progress: percent });
+    });
+
+    try {
+      zip = new AdmZip(mrpackPath);
+    } catch (err) {
+      throw new Error('Modpack archive is corrupted. Please try again.');
+    }
+  }
 
   // 3. Extract mrpack and read modrinth.index.json
   sendProgress({ status: 'extracting', message: 'Parsing modpack index...' });
-  let zip;
-  try {
-    zip = new AdmZip(mrpackPath);
-  } catch (err) {
-    throw new Error('Modpack archive is corrupted. Please try again.');
+  if (!zip) {
+    try {
+      zip = new AdmZip(mrpackPath);
+    } catch (err) {
+      throw new Error('Modpack archive is corrupted. Please try again.');
+    }
   }
 
   const indexEntry = zip.getEntry('modrinth.index.json');
@@ -797,11 +927,32 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
  */
 async function verifyModpackFilesBySha1(instanceDir, configUrl, sendProgress) {
   let actualMrpackUrl = configUrl;
-  if (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com')) {
-    const ghMatch = configUrl.match(/github(?:usercontent)?\.com\/(?:raw\/)?([^\/]+)\/([^\/]+)\/(?:raw\/)?([^\/]+)\/(.+)/);
-    if (ghMatch) {
-      const [_, owner, repo, branch, filepath] = ghMatch;
-      actualMrpackUrl = `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${filepath}`;
+  const ghMatch = configUrl.match(/(?:github\.com\/([^\/]+)\/([^\/]+)\/(?:tree|raw)\/([^\/]+))|(?:raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+))/);
+  if (ghMatch) {
+    const owner = ghMatch[1] || ghMatch[4];
+    const repo = ghMatch[2] || ghMatch[5];
+    const branch = ghMatch[3] || ghMatch[6];
+    if (owner && repo && branch) {
+      try {
+        const resolved = await resolveGitHubBranchModpack(owner, repo, branch);
+        if (resolved && resolved.foundMrpack) {
+          const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${resolved.foundMrpack.split('/').map(encodeURIComponent).join('/')}`;
+          const isLfs = await new Promise((resolve) => {
+            https.get(rawUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
+              let d = '';
+              res.on('data', chunk => d += chunk);
+              res.on('end', () => resolve(d.includes('oid sha256:')));
+            }).on('error', () => resolve(false));
+          });
+          if (isLfs) {
+            actualMrpackUrl = `https://media.githubusercontent.com/media/${owner}/${repo}/${branch}/${resolved.foundMrpack.split('/').map(encodeURIComponent).join('/')}`;
+          } else {
+            actualMrpackUrl = rawUrl;
+          }
+        }
+      } catch (e) {
+        console.warn('verifyModpackFilesBySha1 branch resolution failed:', e.message);
+      }
     }
   }
 
@@ -874,5 +1025,7 @@ async function verifyModpackFilesBySha1(instanceDir, configUrl, sendProgress) {
 
 module.exports = {
   checkAndInstallUpdate,
-  verifyModpackFilesBySha1
+  verifyModpackFilesBySha1,
+  checkModpackIntegrity,
+  resolveGitHubBranchModpack
 };

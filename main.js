@@ -1,9 +1,9 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { checkAndInstallUpdate } = require('./updater');
+const { checkAndInstallUpdate, resolveGitHubBranchModpack } = require('./updater');
 const { launchMinecraft, repairProfile } = require('./launcher');
-const { getPackBuiltinModsInfo } = require('./mod-helper');
+const { getPackBuiltinModsInfo, checkModpackIntegrity } = require('./mod-helper');
 const { autoUpdater } = require('electron-updater');
 const DiscordRPC = require('discord-rpc');
 
@@ -88,7 +88,7 @@ const modpacks = {
     name: 'Create: Stranded at sea',
     mcVersion: '1.20.1',
     loader: 'fabric-0.15.11',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/sea/modpack_test_1.0.0.mrpack',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/sea',
     mockConfig: {
       version: '1.2.0',
       minecraft: '1.20.1',
@@ -100,7 +100,7 @@ const modpacks = {
     name: 'Create: New World',
     mcVersion: '1.21.1',
     loader: 'neoforge-21.1.248',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/createnewworld/createnewworld.mrpack',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/createnewworld',
     mockConfig: {
       version: '1.0.0',
       minecraft: '1.21.1',
@@ -112,7 +112,7 @@ const modpacks = {
     name: 'Cobblemon',
     mcVersion: '1.20.1',
     loader: 'fabric-0.15.11',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/cobblemon/modpack_test_1.0.0.mrpack',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/cobblemon',
     mockConfig: {
       version: '2.1.0',
       minecraft: '1.20.1',
@@ -124,9 +124,9 @@ const modpacks = {
     name: 'Pluto',
     mcVersion: '1.21.1',
     loader: 'neoforge-21.1.257',
-    configUrl: 'https://github.com/ddidif/submarinemilkkk/raw/Pluto/Pluto%201.5.mrpack',
+    configUrl: 'https://github.com/ddidif/submarinemilkkk/tree/Pluto',
     mockConfig: {
-      version: '1.5',
+      version: '1.8.1',
       minecraft: '1.21.1',
       loader: 'neoforge-21.1.257',
       mrpack_url: 'mock://pluto/pack.mrpack'
@@ -802,35 +802,31 @@ ipcMain.handle('check-updates', async (event, packKey) => {
     } catch (e) { }
   }
 
+  // Check mods integrity
+  let modsMissing = false;
+  let missingModsCount = 0;
+  if (localConfig) {
+    const integrity = checkModpackIntegrity(instanceDir);
+    if (!integrity.intact && integrity.reason !== 'not_installed') {
+      modsMissing = true;
+      missingModsCount = integrity.missingCount;
+    }
+  }
+
   // Retroactive metadata fetch if version is present but user-facing version info is missing
   if (localConfig && !packVersion && !commitMessage) {
     const configUrl = pack.configUrl;
     if (configUrl && (configUrl.includes('github.com') || configUrl.includes('githubusercontent.com'))) {
       try {
-        const repoMatch = configUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/raw\/([^\/]+)\/(.+)/);
+        const repoMatch = configUrl.match(/(?:github\.com\/([^\/]+)\/([^\/]+)\/(?:raw|tree)\/([^\/]+))|(?:raw\.githubusercontent\.com\/([^\/]+)\/([^\/]+)\/([^\/]+))/);
         if (repoMatch) {
-          const [_, owner, repo, branch, filepath] = repoMatch;
-          const safeBranch = encodeURIComponent(decodeURIComponent(branch));
-          const safePath = encodeURIComponent(decodeURIComponent(filepath));
-          const apiUrl = `https://api.github.com/repos/${owner}/${repo}/commits?path=${safePath}&sha=${safeBranch}&page=1&per_page=1`;
-          
-          const https = require('https');
-          const apiText = await new Promise((resolve, reject) => {
-            const req = https.get(apiUrl, { headers: { 'User-Agent': 'smilk-launcher' } }, (res) => {
-              let data = '';
-              res.on('data', chunk => data += chunk);
-              res.on('end', () => resolve(data));
-            });
-            req.on('error', reject);
-            req.setTimeout(3000, () => {
-              req.destroy();
-              reject(new Error('Timeout'));
-            });
-          });
-          const json = JSON.parse(apiText);
-          if (json && json.length > 0 && json[0].commit) {
-            const remoteCommitMsg = json[0].commit.message;
-            if (remoteCommitMsg) {
+          const owner = repoMatch[1] || repoMatch[4];
+          const repo = repoMatch[2] || repoMatch[5];
+          const branch = repoMatch[3] || repoMatch[6];
+          if (owner && repo && branch) {
+            const resolved = await resolveGitHubBranchModpack(owner, repo, branch);
+            if (resolved && resolved.commitMessage) {
+              const remoteCommitMsg = resolved.commitMessage;
               commitMessage = remoteCommitMsg;
               localConfig.commitMessage = remoteCommitMsg;
               
@@ -841,7 +837,7 @@ ipcMain.handle('check-updates', async (event, packKey) => {
               }
               
               fs.writeFileSync(localVersionFile, JSON.stringify(localConfig, null, 2), 'utf8');
-              console.log(`Resolved missing commitMessage/packVersion retroactively for ${packKey} via API: ${remoteCommitMsg}`);
+              console.log(`Resolved missing commitMessage/packVersion retroactively for ${packKey} via Atom feed: ${remoteCommitMsg}`);
             }
           }
         }
@@ -855,9 +851,11 @@ ipcMain.handle('check-updates', async (event, packKey) => {
     localVersion,
     packVersion,
     commitMessage,
-    mcVersion,
+    mcVersion: mcVersion || pack.mcVersion,
     remoteVersion: 'Checking...', // Will check via start-update
-    mockMode: settings.mockMode
+    mockMode: settings.mockMode,
+    modsMissing,
+    missingModsCount
   };
 });
 
@@ -947,6 +945,20 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
       throw new Error('Modpack must be installed before launching.');
     }
     const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
+
+    // Pre-flight check: verify mods directory and managed files before launching
+    const integrity = checkModpackIntegrity(instanceDir);
+    if (!integrity.intact && integrity.reason !== 'not_installed') {
+      console.warn(`[Pre-Flight Guard] Detected missing mods for ${packKey} (${integrity.details || integrity.reason}). Restoring before launch...`);
+      sendProgress({
+        status: 'checking',
+        message: 'Missing mod files detected! Restoring modpack before launch...'
+      });
+
+      const extendedSettings = { ...settings, mcVersion: pack.mcVersion, loader: pack.loader, extraMods: pack.extraMods };
+      await checkAndInstallUpdate(packKey, pack.configUrl, instanceDir, sendProgress, extendedSettings);
+      console.log(`[Pre-Flight Guard] Modpack files restored successfully for ${packKey}`);
+    }
 
     await launchMinecraft(
       instanceDir,
