@@ -120,6 +120,18 @@ const modpacks = {
       mrpack_url: 'mock://cobblemon/pack.mrpack'
     }
   },
+  horizon: {
+    name: 'Horizon (Rust MC)',
+    mcVersion: '26.3',
+    loader: 'Rust (Native)',
+    type: 'rust',
+    configUrl: 'https://github.com/horizon-rust/horizon',
+    mockConfig: {
+      version: '0.2.97',
+      minecraft: '26.3',
+      loader: 'Rust (Native)'
+    }
+  },
   pluto: {
     name: 'Pluto',
     mcVersion: '1.21.1',
@@ -805,7 +817,7 @@ ipcMain.handle('check-updates', async (event, packKey) => {
   // Check mods integrity
   let modsMissing = false;
   let missingModsCount = 0;
-  if (localConfig) {
+  if (localConfig && packKey !== 'horizon' && pack.type !== 'rust') {
     const integrity = checkModpackIntegrity(instanceDir);
     if (!integrity.intact && integrity.reason !== 'not_installed') {
       modsMissing = true;
@@ -946,6 +958,14 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
     }
     const localConfig = JSON.parse(fs.readFileSync(localVersionFile, 'utf8'));
 
+    // Rust native launch path
+    if (pack.type === 'rust' || packKey === 'horizon') {
+      sendProgress({ status: 'launching', message: 'Launching Horizon (Rust Native)...' });
+      const { launchHorizon } = require('./launcher');
+      await launchHorizon(instanceDir, settings.nickname, sendProgress, settings.forceDiscreteGpu !== false);
+      return { success: true };
+    }
+
     // Pre-flight check: verify mods directory and managed files before launching
     const integrity = checkModpackIntegrity(instanceDir);
     if (!integrity.intact && integrity.reason !== 'not_installed') {
@@ -985,6 +1005,9 @@ ipcMain.handle('start-launch', async (event, packKey, overrideNickname) => {
 
 // Check Installed Mods IPC
 ipcMain.handle('check-installed-mods', async (event, packKey) => {
+  if (packKey === 'horizon') {
+    return { hasBuiltinShaders: false, installedMods: [] };
+  }
   try {
     const instanceDir = path.join(userDataPath, 'game_data', 'instances', packKey);
     return getPackBuiltinModsInfo(instanceDir);

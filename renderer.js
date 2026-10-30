@@ -21,6 +21,13 @@ const packDetails = {
     loader: 'Fabric-0.15.11',
     serverIp: '185.206.149.27:25601'
   },
+  horizon: {
+    title: 'Horizon (Rust MC)',
+    description: 'A ground-up clean-room rewrite of Minecraft in Rust. Blazing native Vulkan performance, zero JVM overhead, and modern memory safety.',
+    mcVersion: '26.3',
+    loader: 'Rust (Native)',
+    serverIp: '127.0.0.1:25565'
+  },
   pluto: {
     title: 'Pluto',
     description: 'A Vanilla+ adventure powered by Create engineering, ultra-realistic world generation, and deep space elements. Construct automated factories, forge contraptions, and explore celestial frontiers.',
@@ -2593,6 +2600,7 @@ function switchModpack(packKey) {
   else if (packKey === 'cobblemon') activeTheme = 'theme-cobblemon';
   else if (packKey === 'create_new_world') activeTheme = 'theme-new-world';
   else if (packKey === 'pluto') activeTheme = 'theme-pluto';
+  else if (packKey === 'horizon') activeTheme = 'theme-horizon';
   
   // Re-initialize particles on theme change (clears old ones and respawns them)
   initParticles();
@@ -2617,6 +2625,11 @@ function switchModpack(packKey) {
   const serverPill = document.getElementById('stat-pill-server');
   if (installedVerPill) installedVerPill.style.display = '';
   if (serverPill) serverPill.style.display = '';
+
+  const packTestBadge = document.getElementById('pack-test-badge');
+  if (packTestBadge) {
+    packTestBadge.style.display = packKey === 'horizon' ? 'inline-block' : 'none';
+  }
 
   // Save selected modpack preference automatically
   if (configSettings) {

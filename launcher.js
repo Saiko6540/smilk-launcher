@@ -1140,8 +1140,76 @@ async function repairProfile(instanceDir, packKey, sendProgress, options = {}) {
   return { success: true };
 }
 
+async function launchHorizon(instanceDir, nickname, sendProgress, forceDiscreteGpu = true) {
+  return new Promise((resolve, reject) => {
+    let clientExe = path.join(instanceDir, 'horizon-client.exe');
+    let resourcesPath = path.join(instanceDir, '.local', 'horizon-client', '26.3');
+
+    const roaming = process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME, 'Library', 'Application Support') : path.join(process.env.HOME, '.config'));
+    const globalVerDir = path.join(roaming, 'horizon-launcher', 'versions', 'v0.2.97');
+    if (!fs.existsSync(clientExe) && fs.existsSync(path.join(globalVerDir, 'horizon-client.exe'))) {
+      clientExe = path.join(globalVerDir, 'horizon-client.exe');
+      resourcesPath = path.join(globalVerDir, '.local', 'horizon-client', '26.3');
+    }
+
+    if (!fs.existsSync(clientExe)) {
+      return reject(new Error('Horizon client executable not found. Please update/install the profile first.'));
+    }
+
+    const args = [];
+    if (resourcesPath && fs.existsSync(resourcesPath)) {
+      args.push('--resources', resourcesPath);
+    }
+    if (nickname && typeof nickname === 'string' && nickname.trim()) {
+      args.push('--name', nickname.trim());
+    }
+
+    sendProgress({ status: 'game_started', message: 'Horizon client started' });
+
+    const env = { ...process.env };
+    if (forceDiscreteGpu) {
+      if (process.platform === 'win32') {
+        env.SHIM_MCCOMPAT = '0x800000001';
+        env['__NV_PRIME_RENDER_OFFLOAD'] = '1';
+        env['__GLX_VENDOR_LIBRARY_NAME'] = 'nvidia';
+      } else if (process.platform === 'linux') {
+        env['__NV_PRIME_RENDER_OFFLOAD'] = '1';
+        env['__GLX_VENDOR_LIBRARY_NAME'] = 'nvidia';
+        env['DRI_PRIME'] = '1';
+      }
+    }
+
+    const child = spawn(clientExe, args, {
+      cwd: instanceDir,
+      env: env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    child.stdout.on('data', (chunk) => {
+      const msg = chunk.toString('utf8');
+      sendProgress({ status: 'game_running', message: msg });
+    });
+
+    child.stderr.on('data', (chunk) => {
+      const msg = chunk.toString('utf8');
+      sendProgress({ status: 'game_running', message: msg });
+    });
+
+    child.on('error', (err) => {
+      sendProgress({ status: 'error', message: `Horizon process error: ${err.message}` });
+      reject(err);
+    });
+
+    child.on('close', (code) => {
+      sendProgress({ status: 'game_exited', message: `Horizon exited with code ${code}` });
+      resolve({ exitCode: code });
+    });
+  });
+}
+
 module.exports = {
   launchMinecraft,
+  launchHorizon,
   repairProfile,
   resolveAndPrepareAssetIndex,
   getSharedGameData,

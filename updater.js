@@ -3,6 +3,7 @@ const path = require('path');
 const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
+const { exec } = require('child_process');
 const AdmZip = require('adm-zip');
 const { hasModId, scanModsDirectory, getFileSha1, checkModpackIntegrity } = require('./mod-helper');
 
@@ -251,6 +252,82 @@ async function resolveGitHubBranchModpack(owner, repo, branch) {
   return result;
 }
 
+async function installOrUpdateHorizon(instanceDir, sendProgress) {
+  sendProgress({ status: 'checking', message: 'Checking Horizon (Rust) installation...' });
+  fs.mkdirSync(instanceDir, { recursive: true });
+
+  const roaming = process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME, 'Library', 'Application Support') : path.join(process.env.HOME, '.config'));
+  const horizonLauncherData = path.join(roaming, 'horizon-launcher');
+  const targetVer = 'v0.2.97';
+  const installedVerDir = path.join(horizonLauncherData, 'versions', targetVer);
+  const resourcesPath = path.join(installedVerDir, '.local', 'horizon-client', '26.3');
+  const resourcesJson = path.join(resourcesPath, 'horizon-resources.json');
+
+  const finalConfig = {
+    version: targetVer.replace(/^v/, ''),
+    packVersion: targetVer.replace(/^v/, ''),
+    commitMessage: `Horizon (Rust Native Minecraft) 26.3 [${targetVer}]`,
+    minecraft: '26.3',
+    loader: 'Rust (Native)',
+    type: 'rust'
+  };
+
+  const localVersionFile = path.join(instanceDir, 'local_version.json');
+
+  if (fs.existsSync(resourcesJson)) {
+      // Repair panorama from 69-byte placeholders to high-res Minecraft 3D panorama
+  const prepareExe = path.join(installedVerDir, 'horizon-prepare.exe');
+  if (fs.existsSync(prepareExe)) {
+    await new Promise((resolve) => {
+      exec(`"${prepareExe}" panorama --root "${installedVerDir}"`, () => resolve());
+    });
+  }
+
+  fs.writeFileSync(localVersionFile, JSON.stringify(finalConfig, null, 2), 'utf8');
+    sendProgress({ status: 'ready', message: 'Horizon (Rust MC) is ready to play!', config: finalConfig });
+    return finalConfig;
+  }
+
+  // Not ready yet: setup Horizon
+  sendProgress({ status: 'downloading', message: 'Setting up Horizon Native client & assets...', progress: 10 });
+  const tempBinDir = path.join(roaming, 'horizon-launcher', 'bin');
+  fs.mkdirSync(tempBinDir, { recursive: true });
+  const launcherExe = path.join(tempBinDir, 'horizon-launcher.exe');
+
+  if (!fs.existsSync(launcherExe)) {
+    sendProgress({ status: 'downloading', message: 'Downloading Horizon toolchain...', progress: 20 });
+    const zipUrl = 'https://github.com/horizon-rust/horizon/releases/download/launcher%400.2.28/horizon-launcher-windows-x64.zip';
+    const zipPath = path.join(tempBinDir, 'launcher.zip');
+    await downloadFile(zipUrl, zipPath);
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip(zipPath);
+    zip.extractAllTo(tempBinDir, true);
+    fs.unlink(zipPath, () => {});
+  }
+
+  sendProgress({ status: 'installing', message: `Installing Horizon ${targetVer}...`, progress: 40 });
+
+  await new Promise((resolve) => {
+    exec(`"${launcherExe}" install ${targetVer}`, (err) => {
+      if (err) console.warn('Horizon install warning:', err.message);
+      resolve();
+    });
+  });
+
+  sendProgress({ status: 'preparing', message: 'Preparing Minecraft 26.3 assets & resources...', progress: 60 });
+  await new Promise((resolve) => {
+    exec(`"${launcherExe}" prepare --version ${targetVer}`, (err, stdout, stderr) => {
+      if (err) console.warn('Horizon prepare info:', stdout || stderr || err.message);
+      resolve();
+    });
+  });
+
+  fs.writeFileSync(localVersionFile, JSON.stringify(finalConfig, null, 2), 'utf8');
+  sendProgress({ status: 'ready', message: 'Horizon (Rust MC) is ready to play!', config: finalConfig });
+  return finalConfig;
+}
+
+  
 /**
  * Main update routine
  */
@@ -259,6 +336,11 @@ async function checkAndInstallUpdate(packKey, configUrl, instanceDir, sendProgre
   sendProgress({ status: 'checking', message: 'Checking for updates...' });
 
   const targetShaders = (settings.addons && settings.addons[packKey] && settings.addons[packKey].shaders !== undefined) ? settings.addons[packKey].shaders : false;
+
+// --- RUST NATIVE HORIZON MODE ---
+  if (packKey === 'horizon' || configUrl === 'rust') {
+    return await installOrUpdateHorizon(instanceDir, sendProgress);
+  }
 
   // --- VANILLA / NO-MRPACK MODE ---
   if (configUrl === 'vanilla') {
