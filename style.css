@@ -60,9 +60,6 @@ body.theme-horizon .backdrop-glow {
   background: radial-gradient(circle at 65% 25%, rgba(249, 115, 22, 0.35) 0%, rgba(239, 68, 68, 0.2) 45%, transparent 70%);
 }
 
-body.theme-pluto .app-container {
-  background: linear-gradient(135deg, rgba(8, 6, 16, 0.72) 0%, rgba(16, 10, 32, 0.78) 50%, rgba(4, 16, 28, 0.82) 100%), url('screenshots/pluto.png') no-repeat center center / cover;
-}
 
 body.theme-pluto .backdrop-glow {
   background: radial-gradient(circle at 65% 25%, rgba(192, 132, 252, 0.35) 0%, rgba(56, 189, 248, 0.2) 45%, transparent 70%);
@@ -1393,11 +1390,6 @@ body.halloween-mode {
   --glow: 0 0 22px rgba(255, 122, 24, 0.3);
   --card-bg: linear-gradient(135deg, rgba(255, 122, 24, 0.16) 0%, rgba(120, 40, 170, 0.14) 100%);
   --border-color: rgba(255, 138, 31, 0.45);
-}
-
-/* The Pluto pack paints a screenshot behind the UI — the night scene replaces it */
-body.halloween-mode .app-container {
-  background: none;
 }
 
 /* Legibility veil: darkens behind the copy, leaves the moon & graveyard bright */
